@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>TeslaPilot V13 - Settings Pro</title>
+    <title>TeslaPilot V13 - Pro</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -16,81 +16,55 @@
         #map-container { width: 100%; height: 100%; position: relative; background: #000; overflow: hidden; }
         #map { position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; z-index: 1; transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1); }
 
-        /* CONTROLES */
         .side-controls { position: absolute; top: 20px; right: 20px; z-index: 2000; display: flex; flex-direction: column; gap: 12px; }
         .side-btn { width: 55px; height: 55px; border-radius: 50%; background: var(--glass); border: 1px solid rgba(255,255,255,0.2); display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; color: white; font-weight: bold; backdrop-filter: blur(10px); }
         
-        /* UI OVERLAY */
         .ui-overlay { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 1000; display: flex; gap: 10px; background: rgba(0,0,0,0.85); padding: 10px 20px; border-radius: 50px; border: 1px solid rgba(255,255,255,0.1); }
         .btn { color: white; font-size: 13px; font-weight: bold; cursor: pointer; background: none; border: none; }
         .btn-start { background: var(--tesla-red); padding: 5px 15px; border-radius: 15px; }
 
-        /* RADAR MODAL */
+        /* RADAR MODAL AVEC BARRE */
         #radar-modal { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%) scale(0.5); width: 300px; background: var(--glass); border: 5px solid var(--tesla-red); border-radius: 35px; padding: 25px; z-index: 9999; text-align: center; opacity: 0; visibility: hidden; transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
         #radar-modal.show { transform: translate(-50%, -50%) scale(1); opacity: 1; visibility: visible; }
         .speed-circle { width: 90px; height: 90px; border: 8px solid #E81922; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 40px; font-weight: 900; margin: 15px auto; background: white; color: black; }
+        
+        /* CSS DE LA BARRE */
+        .proxi-container { width: 100%; height: 12px; background: #333; border-radius: 10px; margin-top: 15px; overflow: hidden; border: 1px solid #444; }
+        #proxi-bar { width: 100%; height: 100%; background: linear-gradient(90deg, #ff0000, #ffea00, #00ff00); transition: width 0.3s ease-out; }
 
-        /* RÉGLAGES MODAL */
         #settings-modal { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 85%; max-width: 400px; background: var(--glass); border: 1px solid rgba(255,255,255,0.2); border-radius: 20px; padding: 25px; z-index: 10000; display: none; backdrop-filter: blur(20px); }
         .setting-row { margin-bottom: 20px; }
         .setting-row label { display: block; font-size: 14px; margin-bottom: 8px; color: #aaa; }
         select, input[type="range"] { width: 100%; background: #222; color: white; border: 1px solid #444; padding: 10px; border-radius: 8px; }
 
         .status-panel { position: absolute; bottom: 30px; left: 30px; z-index: 1000; background: var(--glass); padding: 10px 20px; border-radius: 12px; color: white; border-left: 5px solid var(--tesla-red); }
-        .car-marker { transition: transform 0.4s ease-out; }
-
-        /* LA BARRE DE PROGRESSION ET SON CONTENEUR */
-.proxi-container { 
-    width: 100%; 
-    height: 12px; 
-    background: #333; 
-    border-radius: 10px; 
-    margin-top: 15px; 
-    overflow: hidden; 
-    border: 1px solid #444; 
-}
-
-#proxi-bar { 
-    width: 100%; 
-    height: 100%; 
-    /* Dégradé du Rouge (proche) au Vert (loin) */
-    background: linear-gradient(90deg, #E81922, #ffea00, #2ecc71); 
-    transition: width 0.3s ease-out; 
-}
     </style>
 </head>
 <body>
 
-<div id="radar-modal">
-    <div style="font-size: 18px; color: var(--tesla-red); font-weight: 900;">⚠️ RADAR ⚠️</div>
-    <div class="speed-circle" id="modal-speed">--</div>
-    
-    <div id="dist-text" style="font-size: 14px; font-weight: bold; margin-bottom: 5px;">APPROCHE...</div>
-    
-    <div class="proxi-container">
-        <div id="proxi-bar"></div>
+    <div id="radar-modal">
+        <div style="font-size: 18px; color: var(--tesla-red); font-weight: 900;">⚠️ RADAR ⚠️</div>
+        <div class="speed-circle" id="modal-speed">--</div>
+        <div id="dist-text" style="font-size: 14px; font-weight: bold; margin-bottom: 5px;">APPROCHE...</div>
+        <div class="proxi-container"><div id="proxi-bar"></div></div>
     </div>
-</div>
 
     <div id="settings-modal">
         <h2 style="margin-top:0; font-size: 20px; border-bottom: 1px solid #333; padding-bottom: 10px;">Réglages TeslaPilot</h2>
-        
         <div class="setting-row">
             <label>Distance de détection (mètres)</label>
             <input type="range" id="set-dist" min="200" max="2000" step="100" oninput="updateSetVal('val-dist', this.value)">
             <div id="val-dist" style="text-align:right; font-size:12px; color:var(--tesla-red)">500m</div>
         </div>
-
         <div class="setting-row">
             <label>Volume des bips</label>
             <select id="set-vol">
                 <option value="0.05">Faible</option>
                 <option value="0.15" selected>Normal</option>
                 <option value="0.3">Fort</option>
-                <option value="0.4">Très Fort</option>
+                <option value="0.6">Très Fort</option>
             </select>
         </div>
-
         <div class="setting-row">
             <label>Alertes sonores</label>
             <select id="set-sound">
@@ -98,7 +72,6 @@
                 <option value="false">Désactivées</option>
             </select>
         </div>
-
         <button class="btn-start" style="width:100%; padding:12px; font-size:16px;" onclick="saveSettings()">ENREGISTRER</button>
     </div>
 
@@ -107,9 +80,7 @@
             <svg id="arrow-svg" viewBox="0 0 24 24" width="24"><path d="M12 2L4.5 20.29L5.21 21L12 18L18.79 21L19.5 20.29L12 2Z" fill="white"/></svg>
             <span id="orientText" style="font-size:8px; margin-top:2px;">NORD</span>
         </button>
-        <button class="side-btn" onclick="toggleSettings()">
-            <svg viewBox="0 0 24 24" width="24" fill="white"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
-        </button>
+        <button class="side-btn" onclick="toggleSettings()"><svg viewBox="0 0 24 24" width="24" fill="white"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg></button>
         <button class="side-btn" onclick="map.zoomIn()">+</button>
         <button class="side-btn" onclick="map.zoomOut()">-</button>
     </div>
@@ -127,68 +98,42 @@
     <div id="map-container"><div id="map"></div></div>
 
     <script>
-        // RÉGLAGES PAR DÉFAUT
-        let config = {
-            distance: 500,
-            volume: 0.15,
-            soundEnabled: true
-        };
-
-        // Chargement des réglages sauvegardés
-        if(localStorage.getItem('teslaConfig')) {
-            config = JSON.parse(localStorage.getItem('teslaConfig'));
-        }
+        let config = { distance: 500, volume: 0.15, soundEnabled: true };
+        if(localStorage.getItem('teslaConfig')) { config = JSON.parse(localStorage.getItem('teslaConfig')); }
 
         var mapMode = "north", myPos = null, currentBearing = 0, audioCtx = null, lastAlertTime = 0;
         var map = L.map('map', { zoomControl: false, maxZoom: 18, preferCanvas: true });
         var radarLayer = L.layerGroup().addTo(map);
         var carMarker = null;
 
-        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 18, preload: true, keepBuffer: 20 }).addTo(map);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', { maxZoom: 18, preload: true, keepBuffer: 15 }).addTo(map);
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 18 }).addTo(map);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', { maxZoom: 18 }).addTo(map);
 
         const carSvg = `<svg width="50" height="50" viewBox="0 0 100 100"><path d="M50 10 L85 85 L50 70 L15 85 Z" fill="#E81922" stroke="white" stroke-width="5" stroke-linejoin="round"/></svg>`;
 
         function initAudio() { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); document.getElementById('startBtn').style.display = 'none'; }
         
-function beep() { 
-    if (!audioCtx || !config.soundEnabled) return; 
+        function beep() { 
+            if (!audioCtx || !config.soundEnabled) return; 
+            let osc1 = audioCtx.createOscillator(); let g1 = audioCtx.createGain();
+            osc1.connect(g1); g1.connect(audioCtx.destination);
+            osc1.frequency.value = 880;
+            g1.gain.setValueAtTime(config.volume, audioCtx.currentTime);
+            g1.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+            osc1.start(); osc1.stop(audioCtx.currentTime + 0.15);
 
-    // --- PREMIER BIP (Tonalité de base) ---
-    let osc1 = audioCtx.createOscillator(); 
-    let gain1 = audioCtx.createGain(); 
-    osc1.connect(gain1); 
-    gain1.connect(audioCtx.destination); 
-    
-    osc1.frequency.value = 880; // Note initiale
-    gain1.gain.setValueAtTime(config.volume, audioCtx.currentTime);
-    gain1.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
-    
-    osc1.start(audioCtx.currentTime);
-    osc1.stop(audioCtx.currentTime + 0.15);
-
-    // --- DEUXIÈME BIP (Plus aigu, 0.15s plus tard) ---
-    let osc2 = audioCtx.createOscillator(); 
-    let gain2 = audioCtx.createGain(); 
-    osc2.connect(gain2); 
-    gain2.connect(audioCtx.destination); 
-    
-    osc2.frequency.value = 1100; // Plus aigu pour l'urgence
-    gain2.gain.setValueAtTime(0, audioCtx.currentTime); // Silence au début
-    gain2.gain.setValueAtTime(config.volume, audioCtx.currentTime + 0.15);
-    gain2.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
-    
-    osc2.start(audioCtx.currentTime + 0.15);
-    osc2.stop(audioCtx.currentTime + 0.3); 
-}
+            let osc2 = audioCtx.createOscillator(); let g2 = audioCtx.createGain();
+            osc2.connect(g2); g2.connect(audioCtx.destination);
+            osc2.frequency.value = 1100;
+            g2.gain.setValueAtTime(0, audioCtx.currentTime);
+            g2.gain.setValueAtTime(config.volume, audioCtx.currentTime + 0.15);
+            g2.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+            osc2.start(audioCtx.currentTime + 0.15); osc2.stop(audioCtx.currentTime + 0.3);
+        }
 
         function toggleSettings() {
             const m = document.getElementById('settings-modal');
             m.style.display = (m.style.display === 'block') ? 'none' : 'block';
-            document.getElementById('set-dist').value = config.distance;
-            document.getElementById('val-dist').innerText = config.distance + "m";
-            document.getElementById('set-vol').value = config.volume;
-            document.getElementById('set-sound').value = config.soundEnabled.toString();
         }
 
         function updateSetVal(id, val) { document.getElementById(id).innerText = val + "m"; }
@@ -203,30 +148,28 @@ function beep() {
 
         function toggleOrientation() {
             mapMode = (mapMode === "north") ? "direction" : "north";
-            document.body.classList.toggle('mode-direction');
             document.getElementById('orientText').innerText = (mapMode === "north") ? "NORD" : "SENS";
             updateRotation();
         }
 
         function updateRotation() {
             const mapEl = document.getElementById('map');
-            const arrowSvg = document.getElementById('arrow-svg');
             if (mapMode === "direction") {
                 mapEl.style.transform = `rotate(${-currentBearing}deg)`;
-                arrowSvg.style.transform = `rotate(${-currentBearing}deg)`;
-                arrowSvg.style.fill = 'var(--tesla-red)';
-            } else {
-                mapEl.style.transform = `rotate(0deg)`;
-                arrowSvg.style.transform = `rotate(0deg)`;
-                arrowSvg.style.fill = 'white';
-            }
+            } else { mapEl.style.transform = `rotate(0deg)`; }
+        }
+
+        function updateProgressBar(dist) {
+            const pct = Math.max(0, Math.min(100, (dist / config.distance) * 100));
+            document.getElementById('proxi-bar').style.width = pct + "%";
+            document.getElementById('dist-text').innerText = Math.round(dist) + "m - RALENTIR";
         }
 
         function moveCar(latlng) {
             if (myPos) { currentBearing = L.GeometryUtil.getBearing(myPos, latlng); }
             myPos = latlng;
             if (!carMarker) {
-                carMarker = L.marker(myPos, { icon: L.divIcon({ html: `<div id="car-nav">${carSvg}</div>`, className: '', iconSize: [50, 50], iconAnchor: [25, 25] }) }).addTo(map);
+                carMarker = L.marker(myPos, { icon: L.divIcon({ html: `<div>${carSvg}</div>`, className: '', iconSize: [50, 50], iconAnchor: [25, 25] }) }).addTo(map);
             } else { carMarker.setLatLng(myPos); }
             map.panTo(myPos, { animate: true, duration: 1.0 });
             updateRotation();
@@ -242,27 +185,19 @@ function beep() {
                 const data = await res.json();
                 radarLayer.clearLayers();
                 data.elements.forEach(r => {
+                    const dist = map.distance(myPos, [r.lat, r.lon]);
                     L.marker([r.lat, r.lon], { icon: L.divIcon({ html: `<div style="background:var(--tesla-red);border-radius:50%;width:10px;height:10px;border:2px solid white"></div>`, className: '' }) }).addTo(radarLayer);
                     if (dist < config.distance) {
-    updateProgressBar(dist); // Mise à jour de la barre
-    triggerModal(r.tags.maxspeed || "??"); // Déclenchement alerte
-}
+                        updateProgressBar(dist);
+                        triggerModal(r.tags.maxspeed || "??");
+                    }
                 });
             } catch (e) {}
         }
 
-        function updateProgressBar(dist) {
-    // Calcule le pourcentage (0 à 100%) selon la distance max configurée
-    const pct = Math.max(0, Math.min(100, (dist / config.distance) * 100));
-    
-    // Met à jour la largeur de la barre et le texte
-    document.getElementById('proxi-bar').style.width = pct + "%";
-    document.getElementById('dist-text').innerText = Math.round(dist) + "m - RALENTIR";
-}
-
         function triggerModal(speed) {
-            if (Date.now() - lastAlertTime > 20000) {
-                beep(); setTimeout(beep, 400);
+            if (Date.now() - lastAlertTime > 15000) {
+                beep();
                 document.getElementById('modal-speed').innerHTML = speed;
                 document.getElementById('radar-modal').classList.add('show');
                 setTimeout(() => { document.getElementById('radar-modal').classList.remove('show'); }, 6000);
@@ -270,30 +205,11 @@ function beep() {
             }
         }
 
-        function triggerTest() { triggerModal(110); }
+        function triggerTest() { updateProgressBar(150); triggerModal(110); }
 
-        // --- CORRECTION GÉOLOCALISATION ---
-        map.on('locationfound', (e) => {
-            console.log("Position réelle reçue :", e.latlng);
-            moveCar(e.latlng);
-        });
-
-        map.on('locationerror', (e) => {
-            console.error("Erreur GPS :", e.message);
-        });
-
-        // Forçage des options de précision
-        map.locate({
-            setView: true, 
-            watch: true, 
-            enableHighAccuracy: true, // Utilise le GPS satellite (consomme plus mais précis)
-            maximumAge: 0,            // Interdit d'utiliser la dernière position connue en cache
-            timeout: 20000            // Laisse 20 secondes au GPS pour fixer le signal
-        });
-
-        setInterval(() => { 
-            document.getElementById('clock').innerHTML = new Date().toLocaleTimeString('fr-FR'); 
-        }, 1000);
+        map.on('locationfound', (e) => { moveCar(e.latlng); });
+        map.locate({ setView: true, watch: true, enableHighAccuracy: true });
+        setInterval(() => { document.getElementById('clock').innerHTML = new Date().toLocaleTimeString('fr-FR'); }, 1000);
     </script>
 </body>
 </html>
