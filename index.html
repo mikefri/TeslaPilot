@@ -176,6 +176,18 @@
             fetchRadars();
         }
 
+        function isFacingRadar(userBearing, userPos, radarPos) {
+    // Calcul de l'angle entre ta position et le radar
+    let radarBearing = L.GeometryUtil.getBearing(userPos, radarPos);
+    
+    // Calcul de la différence d'angle
+    let diff = Math.abs(userBearing - radarBearing);
+    if (diff > 180) diff = 360 - diff;
+    
+    // On accepte si le radar est dans un angle de 45° devant nous
+    return diff < 45; 
+}
+
         async function fetchRadars() {
             if (!myPos) return;
             const b = map.getBounds();
@@ -187,10 +199,11 @@
                 data.elements.forEach(r => {
                     const dist = map.distance(myPos, [r.lat, r.lon]);
                     L.marker([r.lat, r.lon], { icon: L.divIcon({ html: `<div style="background:var(--tesla-red);border-radius:50%;width:10px;height:10px;border:2px solid white"></div>`, className: '' }) }).addTo(radarLayer);
-                    if (dist < config.distance) {
-                        updateProgressBar(dist);
-                        triggerModal(r.tags.maxspeed || "??");
-                    }
+// On vérifie : 1. La distance ET 2. Si on roule vers lui
+if (dist < config.distance && isFacingRadar(currentBearing, myPos, radarPos)) {
+    updateProgressBar(dist);
+    triggerModal(r.tags.maxspeed || "??");
+}
                 });
             } catch (e) {}
         }
