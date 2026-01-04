@@ -16,21 +16,24 @@
         #map-container { width: 100%; height: 100%; overflow: hidden; position: relative; background: #000; }
         #map { position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; z-index: 1; transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1); }
 
-        /* BOUTON GPS EN HAUT A DROITE */
-        #orientBtn {
+        /* CONTROLES DROITE (Boussole + Zoom) */
+        .side-controls {
             position: absolute; top: 20px; right: 20px; z-index: 2000;
+            display: flex; flex-direction: column; gap: 12px;
+        }
+        .side-btn {
             width: 55px; height: 55px; border-radius: 50%;
             background: var(--glass); border: 1px solid rgba(255,255,255,0.2);
             display: flex; flex-direction: column; align-items: center; justify-content: center;
             cursor: pointer; backdrop-filter: blur(15px); transition: all 0.3s;
+            color: white; font-weight: bold; font-size: 24px;
         }
         #orientBtn svg { transition: transform 0.5s; fill: white; }
         #orientText { font-size: 8px; color: white; font-weight: bold; margin-top: 2px; }
-        
-        /* Changement de couleur quand actif */
         .mode-direction #orientBtn { border-color: var(--tesla-red); }
         .mode-direction #orientBtn svg { fill: var(--tesla-red); }
 
+        /* UI HAUT */
         .ui-overlay {
             position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
             z-index: 1000; display: flex; gap: 10px; background: rgba(0,0,0,0.85);
@@ -39,6 +42,7 @@
         .btn { color: white; text-decoration: none; font-size: 13px; font-weight: bold; cursor: pointer; background: none; border: none; outline: none; display: flex; align-items: center; gap: 5px; }
         .btn-start { background: var(--tesla-red); padding: 5px 15px; border-radius: 15px; }
         
+        /* ALERTE RADAR */
         #radar-modal {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0.5);
             width: 420px; background: var(--glass); border: 5px solid var(--tesla-red);
@@ -50,35 +54,9 @@
 
         .car-marker { transition: transform 0.4s ease-out; }
         .radar-icon-bg { background: var(--tesla-red); border-radius: 50%; border: 2px solid white; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; }
-        .is-alerting .radar-icon-bg { animation: radar-blink 0.5s infinite alternate; transform: scale(1.4); }
-        @keyframes radar-blink { from { background: var(--tesla-red); } to { background: #fff; } }
-
-        <div class="status-panel">
-    <div id="clock">00:00:00</div>
-    
-</div>
-   
-    /* Barre latérale droite */
-<div class="side-controls">
-    <button id="orientBtn" class="side-btn" onclick="toggleOrientation()">
-        <svg width="24" height="24" viewBox="0 0 24 24"><path d="M12 2L4.5 20.29L5.21 21L12 18L18.79 21L19.5 20.29L12 2Z"/></svg>
-        <span id="orientText">NORD</span>
-    </button>
-    <button class="side-btn" onclick="map.zoomIn()">+</button>
-    <button class="side-btn" onclick="map.zoomOut()">-</button>
-</div>
-
         
-.side-btn {
-    width: 55px; height: 55px; border-radius: 50%;
-    background: var(--glass); border: 1px solid rgba(255,255,255,0.2);
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    cursor: pointer; backdrop-filter: blur(15px); color: white; font-weight: bold; font-size: 20px;
-}
-
-    
-    
-    
+        /* STATUS BAS */
+        .status-panel { position: absolute; bottom: 30px; left: 30px; z-index: 1000; background: var(--glass); padding: 12px 20px; border-radius: 15px; color: white; border-left: 5px solid var(--tesla-red); }
     </style>
 </head>
 <body>
@@ -89,10 +67,14 @@
         <div style="font-size: 18px; font-weight: bold;">RALENTIR</div>
     </div>
 
-    <button id="orientBtn" onclick="toggleOrientation()">
-        <svg width="24" height="24" viewBox="0 0 24 24"><path d="M12 2L4.5 20.29L5.21 21L12 18L18.79 21L19.5 20.29L12 2Z"/></svg>
-        <span id="orientText">NORD</span>
-    </button>
+    <div class="side-controls">
+        <button id="orientBtn" class="side-btn" onclick="toggleOrientation()">
+            <svg width="24" height="24" viewBox="0 0 24 24"><path d="M12 2L4.5 20.29L5.21 21L12 18L18.79 21L19.5 20.29L12 2Z"/></svg>
+            <span id="orientText">NORD</span>
+        </button>
+        <button class="side-btn" onclick="map.zoomIn()">+</button>
+        <button class="side-btn" onclick="map.zoomOut()">-</button>
+    </div>
 
     <div class="ui-overlay" id="ui">
         <button id="startBtn" class="btn btn-start" onclick="initAudio()">ACTIVER</button>
@@ -115,23 +97,19 @@
         var carMarker = null; 
         var audioCtx = null, myPos = null, currentBearing = 0, lastAlertTime = 0;
 
-        // --- TES OPTIONS DE TUILES ET PRECHARGEMENT RESTAUREES ---
+        // --- PRECHARGEMENT ---
         L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { 
-            maxZoom: 18, 
-            keepBuffer: 15, 
-            preload: true 
+            maxZoom: 18, keepBuffer: 15, preload: true 
         }).addTo(map);
 
         L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', { 
-            maxZoom: 18, 
-            keepBuffer: 10 
+            maxZoom: 18, keepBuffer: 10 
         }).addTo(map);
 
         const carSvg = `<svg width="50" height="50" viewBox="0 0 100 100"><path d="M50 10 L85 85 L50 70 L15 85 Z" fill="#E81922" stroke="white" stroke-width="5" stroke-linejoin="round" /></svg>`;
         const radarSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M23 7L16 12L23 17V7Z"/><path d="M1 5C1 3.89543 1.89543 3 3 3H14C15.1046 3 16 3.89543 16 5V19C16 20.1046 15.1046 21 14 21H3C1.89543 21 1 20.1046 1 19V5Z"/></svg>`;
 
         function initAudio() { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); document.getElementById('startBtn').style.display = 'none'; }
-        
         function beep() { if (!audioCtx) return; let osc = audioCtx.createOscillator(); let gain = audioCtx.createGain(); osc.connect(gain); gain.connect(audioCtx.destination); osc.frequency.value = 880; gain.gain.setValueAtTime(0.1, audioCtx.currentTime); osc.start(); osc.stop(audioCtx.currentTime + 0.3); }
 
         function toggleOrientation() {
@@ -145,11 +123,9 @@
             const mapEl = document.getElementById('map');
             const carEl = document.getElementById('car-nav');
             const gpsIcon = document.querySelector('#orientBtn svg');
-            
             if (mapMode === "direction") {
                 mapEl.style.transform = `rotate(${-currentBearing}deg)`;
                 if (carEl) carEl.style.transform = `rotate(0deg)`;
-                // L'icône du bouton haut-droite tourne aussi pour indiquer le Nord (Standard GPS)
                 if (gpsIcon) gpsIcon.style.transform = `rotate(${-currentBearing}deg)`;
             } else {
                 mapEl.style.transform = `rotate(0deg)`;
@@ -191,12 +167,9 @@
         map.on('locationfound', (e) => {
             if (myPos) { currentBearing = L.GeometryUtil.getBearing(myPos, e.latlng); }
             myPos = e.latlng;
-            
             if (!carMarker) {
                 carMarker = L.marker(e.latlng, { icon: L.divIcon({ html: `<div class="car-marker" id="car-nav">${carSvg}</div>`, className: '', iconSize: [50, 50], iconAnchor: [25, 25] }) }).addTo(map);
-            } else {
-                carMarker.setLatLng(e.latlng);
-            }
+            } else { carMarker.setLatLng(e.latlng); }
             updateMapRotation();
             map.panTo(e.latlng, { animate: true, duration: 1.0 });
             fetchRadars();
