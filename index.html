@@ -80,6 +80,7 @@
         <button id="startBtn" class="btn btn-start" onclick="initAudio()">ACTIVER</button>
         <button class="btn" onclick="map.locate({setView: true})">POSITION</button>
         <button class="btn" onclick="triggerTest()" style="opacity:0.2; font-size:10px;">TEST</button>
+        <button class="btn" onclick="startSimulation()" style="color: #00ff00; font-size:10px;">SIMULER</button>
     </div>
 
     <div class="status-panel">
@@ -91,93 +92,116 @@
     </div>
 
     <script>
-        var mapMode = "north"; 
-        var map = L.map('map', { zoomControl: false, maxZoom: 18, minZoom: 6, preferCanvas: true }).setView([48.8566, 2.3522], 15);
-        var radarLayer = L.layerGroup().addTo(map);
-        var carMarker = null; 
-        var audioCtx = null, myPos = null, currentBearing = 0, lastAlertTime = 0;
+    var mapMode = "north"; 
+    var map = L.map('map', { zoomControl: false, maxZoom: 18, minZoom: 6, preferCanvas: true }).setView([48.8566, 2.3522], 15);
+    var radarLayer = L.layerGroup().addTo(map);
+    var carMarker = null; 
+    var audioCtx = null, myPos = null, currentBearing = 0, lastAlertTime = 0;
+    var simInterval = null; // Pour la simulation
 
-        // --- PRECHARGEMENT ---
-        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { 
-            maxZoom: 18, keepBuffer: 15, preload: true 
-        }).addTo(map);
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { 
+        maxZoom: 18, keepBuffer: 15, preload: true 
+    }).addTo(map);
 
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', { 
-            maxZoom: 18, keepBuffer: 10 
-        }).addTo(map);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', { 
+        maxZoom: 18, keepBuffer: 10 
+    }).addTo(map);
 
-        const carSvg = `<svg width="50" height="50" viewBox="0 0 100 100"><path d="M50 10 L85 85 L50 70 L15 85 Z" fill="#E81922" stroke="white" stroke-width="5" stroke-linejoin="round" /></svg>`;
-        const radarSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M23 7L16 12L23 17V7Z"/><path d="M1 5C1 3.89543 1.89543 3 3 3H14C15.1046 3 16 3.89543 16 5V19C16 20.1046 15.1046 21 14 21H3C1.89543 21 1 20.1046 1 19V5Z"/></svg>`;
+    const carSvg = `<svg width="50" height="50" viewBox="0 0 100 100"><path d="M50 10 L85 85 L50 70 L15 85 Z" fill="#E81922" stroke="white" stroke-width="5" stroke-linejoin="round" /></svg>`;
+    const radarSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M23 7L16 12L23 17V7Z"/><path d="M1 5C1 3.89543 1.89543 3 3 3H14C15.1046 3 16 3.89543 16 5V19C16 20.1046 15.1046 21 14 21H3C1.89543 21 1 20.1046 1 19V5Z"/></svg>`;
 
-        function initAudio() { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); document.getElementById('startBtn').style.display = 'none'; }
-        function beep() { if (!audioCtx) return; let osc = audioCtx.createOscillator(); let gain = audioCtx.createGain(); osc.connect(gain); gain.connect(audioCtx.destination); osc.frequency.value = 880; gain.gain.setValueAtTime(0.1, audioCtx.currentTime); osc.start(); osc.stop(audioCtx.currentTime + 0.3); }
+    function initAudio() { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); document.getElementById('startBtn').style.display = 'none'; }
+    function beep() { if (!audioCtx) return; let osc = audioCtx.createOscillator(); let gain = audioCtx.createGain(); osc.connect(gain); gain.connect(audioCtx.destination); osc.frequency.value = 880; gain.gain.setValueAtTime(0.1, audioCtx.currentTime); osc.start(); osc.stop(audioCtx.currentTime + 0.3); }
 
-        function toggleOrientation() {
-            mapMode = (mapMode === "north") ? "direction" : "north";
-            document.body.classList.toggle('mode-direction');
-            document.getElementById('orientText').innerText = (mapMode === "north") ? "NORD" : "SENS";
-            updateMapRotation();
+    function toggleOrientation() {
+        mapMode = (mapMode === "north") ? "direction" : "north";
+        document.body.classList.toggle('mode-direction');
+        document.getElementById('orientText').innerText = (mapMode === "north") ? "NORD" : "SENS";
+        updateMapRotation();
+    }
+
+    function updateMapRotation() {
+        const mapEl = document.getElementById('map');
+        const carEl = document.getElementById('car-nav');
+        const gpsIcon = document.querySelector('#orientBtn svg');
+        if (mapMode === "direction") {
+            mapEl.style.transform = `rotate(${-currentBearing}deg)`;
+            if (carEl) carEl.style.transform = `rotate(0deg)`;
+            if (gpsIcon) gpsIcon.style.transform = `rotate(${-currentBearing}deg)`;
+        } else {
+            mapEl.style.transform = `rotate(0deg)`;
+            if (carEl) carEl.style.transform = `rotate(${currentBearing}deg)`;
+            if (gpsIcon) gpsIcon.style.transform = `rotate(0deg)`;
+        }
+    }
+
+    // --- LOGIQUE DE MISE À JOUR COMMUNE (Réelle ou Simulée) ---
+    function updatePosition(lat, lng) {
+        let newPos = L.latLng(lat, lng);
+        if (myPos) { currentBearing = L.GeometryUtil.getBearing(myPos, newPos); }
+        myPos = newPos;
+
+        if (!carMarker) {
+            carMarker = L.marker(myPos, { icon: L.divIcon({ html: `<div class="car-marker" id="car-nav">${carSvg}</div>`, className: '', iconSize: [50, 50], iconAnchor: [25, 25] }) }).addTo(map);
+        } else {
+            carMarker.setLatLng(myPos);
         }
 
-        function updateMapRotation() {
-            const mapEl = document.getElementById('map');
-            const carEl = document.getElementById('car-nav');
-            const gpsIcon = document.querySelector('#orientBtn svg');
-            if (mapMode === "direction") {
-                mapEl.style.transform = `rotate(${-currentBearing}deg)`;
-                if (carEl) carEl.style.transform = `rotate(0deg)`;
-                if (gpsIcon) gpsIcon.style.transform = `rotate(${-currentBearing}deg)`;
-            } else {
-                mapEl.style.transform = `rotate(0deg)`;
-                if (carEl) carEl.style.transform = `rotate(${currentBearing}deg)`;
-                if (gpsIcon) gpsIcon.style.transform = `rotate(0deg)`;
-            }
+        updateMapRotation();
+        map.panTo(myPos, { animate: true, duration: 0.8 });
+        fetchRadars();
+    }
+
+    // --- FONCTION DE SIMULATION ---
+    function startSimulation() {
+        if (simInterval) return; // Déjà en cours
+        alert("Simulation démarrée (Départ : Paris)");
+        let lat = 48.8566;
+        let lng = 2.3522;
+
+        simInterval = setInterval(() => {
+            lat += 0.0002; // Avance vers le Nord
+            lng += 0.0001; // Légère courbe vers l'Est
+            updatePosition(lat, lng);
+        }, 1000); // Mise à jour chaque seconde
+    }
+
+    async function fetchRadars() {
+        if (!myPos) return;
+        const b = map.getBounds();
+        const url = "https://overpass-api.de/api/interpreter?data=" + encodeURIComponent(`[out:json];node["highway"="speed_camera"](${b.getSouth()},${b.getWest()},${b.getNorth()},${b.getEast()});out body;`);
+        try {
+            const res = await fetch(url); const data = await res.json();
+            radarLayer.clearLayers();
+            data.elements.forEach(r => {
+                L.marker([r.lat, r.lon], { icon: L.divIcon({ html: `<div class="radar-container" id="r-${r.id}"><div class="radar-icon-bg">${radarSvg}</div></div>`, className: '', iconSize: [40, 40] }) }).addTo(radarLayer);
+                let dist = map.distance(myPos, [r.lat, r.lon]);
+                let angle = L.GeometryUtil.getBearing(myPos, [r.lat, r.lon]);
+                let diff = Math.abs(currentBearing - angle);
+                if (dist < 500 && (diff < 45 || diff > 315)) triggerModal(r.tags.maxspeed || "??", r.id);
+            });
+        } catch (e) {}
+    }
+
+    function triggerModal(speed, id) {
+        if (Date.now() - lastAlertTime > 15000) {
+            beep(); setTimeout(beep, 400);
+            document.getElementById('modal-speed').innerHTML = speed;
+            document.getElementById('radar-modal').classList.add('show');
+            setTimeout(() => { document.getElementById('radar-modal').classList.remove('show'); }, 7000);
+            lastAlertTime = Date.now();
         }
+    }
 
-        async function fetchRadars() {
-            const b = map.getBounds();
-            const url = "https://overpass-api.de/api/interpreter?data=" + encodeURIComponent(`[out:json];node["highway"="speed_camera"](${b.getSouth()},${b.getWest()},${b.getNorth()},${b.getEast()});out body;`);
-            try {
-                const res = await fetch(url); const data = await res.json();
-                radarLayer.clearLayers();
-                data.elements.forEach(r => {
-                    L.marker([r.lat, r.lon], { icon: L.divIcon({ html: `<div class="radar-container" id="r-${r.id}"><div class="radar-icon-bg">${radarSvg}</div></div>`, className: '', iconSize: [40, 40] }) }).addTo(radarLayer);
-                    if (myPos) {
-                        let dist = map.distance(myPos, [r.lat, r.lon]);
-                        let angle = L.GeometryUtil.getBearing(myPos, [r.lat, r.lon]);
-                        let diff = Math.abs(currentBearing - angle);
-                        if (dist < 500 && (diff < 45 || diff > 315)) triggerModal(r.tags.maxspeed || "??", r.id);
-                    }
-                });
-            } catch (e) {}
-        }
+    function triggerTest() { triggerModal(130, "test"); }
 
-        function triggerModal(speed, id) {
-            if (Date.now() - lastAlertTime > 15000) {
-                beep(); setTimeout(beep, 400);
-                document.getElementById('modal-speed').innerHTML = speed;
-                document.getElementById('radar-modal').classList.add('show');
-                setTimeout(() => { document.getElementById('radar-modal').classList.remove('show'); }, 7000);
-                lastAlertTime = Date.now();
-            }
-        }
+    // Position réelle (désactivée si simulation en cours)
+    map.on('locationfound', (e) => {
+        if (!simInterval) updatePosition(e.latlng.lat, e.latlng.lng);
+    });
 
-        function triggerTest() { triggerModal(130, "test"); }
-
-        map.on('locationfound', (e) => {
-            if (myPos) { currentBearing = L.GeometryUtil.getBearing(myPos, e.latlng); }
-            myPos = e.latlng;
-            if (!carMarker) {
-                carMarker = L.marker(e.latlng, { icon: L.divIcon({ html: `<div class="car-marker" id="car-nav">${carSvg}</div>`, className: '', iconSize: [50, 50], iconAnchor: [25, 25] }) }).addTo(map);
-            } else { carMarker.setLatLng(e.latlng); }
-            updateMapRotation();
-            map.panTo(e.latlng, { animate: true, duration: 1.0 });
-            fetchRadars();
-        });
-
-        map.locate({setView: true, watch: true, maxZoom: 17, enableHighAccuracy: true});
-        map.on('moveend', fetchRadars);
-        setInterval(() => { document.getElementById('clock').innerHTML = new Date().toLocaleTimeString('fr-FR'); }, 1000);
-    </script>
+    map.locate({setView: true, watch: true, maxZoom: 17, enableHighAccuracy: true});
+    setInterval(() => { document.getElementById('clock').innerHTML = new Date().toLocaleTimeString('fr-FR'); }, 1000);
+</script>
 </body>
 </html>
