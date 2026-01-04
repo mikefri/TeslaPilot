@@ -3,13 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>TeslaPilot V13 - Pro</title>
-    
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="TeslaPilot">
+
+<meta name="theme-color" content="#000000">
+    <title>TeslaPilot</title>
+    <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/leaflet-geometryutil@0.9.3/src/leaflet.geometryutil.min.js"></script>
     <script src="https://unpkg.com/leaflet-edgebuffer@1.2.0/src/leaflet.edgebuffer.js"></script>
-    
+    <script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js')
+                .then(reg => console.log('TeslaPilot PWA prête !'))
+                .catch(err => console.log('Erreur PWA:', err));
+        });
+    }
+</script>
     <style>
         :root { --tesla-red: #E81922; --glass: rgba(0, 0, 0, 0.95); }
         body, html { margin: 0; padding: 0; height: 100%; background: #000; font-family: 'Segoe UI', sans-serif; overflow: hidden; color: white; }
