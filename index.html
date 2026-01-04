@@ -38,15 +38,39 @@
 
         .status-panel { position: absolute; bottom: 30px; left: 30px; z-index: 1000; background: var(--glass); padding: 10px 20px; border-radius: 12px; color: white; border-left: 5px solid var(--tesla-red); }
         .car-marker { transition: transform 0.4s ease-out; }
+
+        /* LA BARRE DE PROGRESSION ET SON CONTENEUR */
+.proxi-container { 
+    width: 100%; 
+    height: 12px; 
+    background: #333; 
+    border-radius: 10px; 
+    margin-top: 15px; 
+    overflow: hidden; 
+    border: 1px solid #444; 
+}
+
+#proxi-bar { 
+    width: 100%; 
+    height: 100%; 
+    /* Dégradé du Rouge (proche) au Vert (loin) */
+    background: linear-gradient(90deg, #E81922, #ffea00, #2ecc71); 
+    transition: width 0.3s ease-out; 
+}
     </style>
 </head>
 <body>
 
-    <div id="radar-modal">
-        <div style="font-size: 18px; color: var(--tesla-red); font-weight: 900;">⚠️ RADAR ⚠️</div>
-        <div class="speed-circle" id="modal-speed">--</div>
-        <div style="font-size: 14px; font-weight: bold;">RALENTIR</div>
+<div id="radar-modal">
+    <div style="font-size: 18px; color: var(--tesla-red); font-weight: 900;">⚠️ RADAR ⚠️</div>
+    <div class="speed-circle" id="modal-speed">--</div>
+    
+    <div id="dist-text" style="font-size: 14px; font-weight: bold; margin-bottom: 5px;">APPROCHE...</div>
+    
+    <div class="proxi-container">
+        <div id="proxi-bar"></div>
     </div>
+</div>
 
     <div id="settings-modal">
         <h2 style="margin-top:0; font-size: 20px; border-bottom: 1px solid #333; padding-bottom: 10px;">Réglages TeslaPilot</h2>
@@ -219,10 +243,22 @@ function beep() {
                 radarLayer.clearLayers();
                 data.elements.forEach(r => {
                     L.marker([r.lat, r.lon], { icon: L.divIcon({ html: `<div style="background:var(--tesla-red);border-radius:50%;width:10px;height:10px;border:2px solid white"></div>`, className: '' }) }).addTo(radarLayer);
-                    if (map.distance(myPos, [r.lat, r.lon]) < config.distance) triggerModal(r.tags.maxspeed || "??");
+                    if (dist < config.distance) {
+    updateProgressBar(dist); // Mise à jour de la barre
+    triggerModal(r.tags.maxspeed || "??"); // Déclenchement alerte
+}
                 });
             } catch (e) {}
         }
+
+        function updateProgressBar(dist) {
+    // Calcule le pourcentage (0 à 100%) selon la distance max configurée
+    const pct = Math.max(0, Math.min(100, (dist / config.distance) * 100));
+    
+    // Met à jour la largeur de la barre et le texte
+    document.getElementById('proxi-bar').style.width = pct + "%";
+    document.getElementById('dist-text').innerText = Math.round(dist) + "m - RALENTIR";
+}
 
         function triggerModal(speed) {
             if (Date.now() - lastAlertTime > 20000) {
