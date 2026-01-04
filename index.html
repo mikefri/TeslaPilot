@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>TeslaPilot - Sat & Radar Live</title>
+    <title>TeslaPilot Sonar - Sat & Radar</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -13,68 +13,75 @@
         body, html { margin: 0; padding: 0; height: 100%; background: #000; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
         #map { position: absolute; top: 0; bottom: 0; width: 100%; z-index: 1; }
 
-        /* Interface Tesla */
         .ui-overlay {
             position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
             z-index: 1000; display: flex; gap: 15px; background: var(--glass);
             padding: 12px 25px; border-radius: 50px; border: 1px solid var(--tesla-red);
-            backdrop-filter: blur(10px); box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            backdrop-filter: blur(10px);
         }
 
-        .btn { color: white; text-decoration: none; font-size: 14px; font-weight: bold; cursor: pointer; background: none; border: none; outline: none; }
-        .btn:hover { color: var(--tesla-red); }
-        
+        .btn { color: white; text-decoration: none; font-size: 14px; font-weight: bold; cursor: pointer; background: none; border: none; }
+        .btn-start { background: var(--tesla-red); padding: 5px 15px; border-radius: 15px; animation: pulse 2s infinite; }
+
         .status-panel {
             position: absolute; bottom: 30px; left: 30px; z-index: 1000;
             background: var(--glass); padding: 15px; border-radius: 12px;
             color: white; border-left: 4px solid var(--tesla-red);
         }
-        #clock { font-size: 22px; font-weight: bold; }
-        .scan-msg { font-size: 10px; color: var(--tesla-red); text-transform: uppercase; margin-bottom: 5px; }
+        #alert-msg { color: #ff0000; font-weight: bold; display: none; margin-top: 5px; }
 
-        /* Style des radars */
-        .radar-icon {
-            background: var(--tesla-red); border: 2px solid white;
-            border-radius: 50%; box-shadow: 0 0 15px var(--tesla-red);
-        }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(232, 25, 34, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(232, 25, 34, 0); } 100% { box-shadow: 0 0 0 0 rgba(232, 25, 34, 0); } }
     </style>
 </head>
 <body>
 
     <div class="ui-overlay">
-        <button class="btn" onclick="map.locate({setView: true, maxZoom: 16})">MA POSITION</button>
+        <button id="startBtn" class="btn btn-start" onclick="initAudio()">ACTIVER SONAR</button>
+        <button class="btn" onclick="map.locate({setView: true})">POSITION</button>
         <a href="https://mikefri.github.io/Teslatv/" class="btn">TESLA TV</a>
-        <a href="https://www.waze.com/fr/live-map" target="_blank" class="btn" style="color: #33ccff;">WAZE LIVE</a>
     </div>
 
     <div class="status-panel">
-        <div class="scan-msg" id="scanner-status">Scanner Radar: Actif</div>
+        <div style="font-size: 10px; color: var(--tesla-red);">TESLAPILOT V5</div>
         <span id="clock">00:00:00</span>
+        <div id="alert-msg">⚠️ RADAR PROCHE !</div>
     </div>
 
     <div id="map"></div>
 
     <script>
-        // 1. Initialisation Carte
         var map = L.map('map', { zoomControl: false }).setView([48.8566, 2.3522], 14);
-        
-        // Fond Satellite ESRI (Gratuit et Stable)
-        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-            maxZoom: 19
-        }).addTo(map);
+        var radarLayer = L.layerGroup().addTo(map);
+        var audioCtx = null;
+        var myPos = null;
+        var lastAlertTime = 0;
 
-        // Noms des rues (Labels)
+        // Fonds de carte
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 }).addTo(map);
         L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png').addTo(map);
 
-        // 2. Système de détection des Radars (Overpass API)
-        var radarLayer = L.layerGroup().addTo(map);
+        // --- GESTION AUDIO ---
+        function initAudio() {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            document.getElementById('startBtn').style.display = 'none';
+        }
 
+        function beep(freq = 660, duration = 200) {
+            if (!audioCtx) return;
+            let osc = audioCtx.createOscillator();
+            let gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.frequency.value = freq;
+            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            osc.start();
+            osc.stop(audioCtx.currentTime + (duration/1000));
+        }
+
+        // --- SCAN RADARS ---
         async function fetchRadars() {
-            document.getElementById('scanner-status').innerHTML = "Scan en cours...";
             const bounds = map.getBounds();
             const bbox = `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`;
-            
-            // Requête OpenStreetMap pour les radars (speed_camera)
             const query = `[out:json][timeout:25];node["highway"="speed_camera"](${bbox});out body;`;
             const url = "https://overpass-api.de/api/interpreter?data=" + encodeURIComponent(query);
 
@@ -84,38 +91,44 @@
                 radarLayer.clearLayers();
                 
                 data.elements.forEach(radar => {
-                    L.circleMarker([radar.lat, radar.lon], {
-                        radius: 7,
-                        fillColor: "#ff0000",
-                        color: "#fff",
-                        weight: 2,
-                        fillOpacity: 1
-                    }).addTo(radarLayer).bindPopup(`<b>RADAR FIXE</b><br>Vitesse max: ${radar.tags.maxspeed || 'Inconnue'} km/h`);
+                    let marker = L.circleMarker([radar.lat, radar.lon], {
+                        radius: 8, fillColor: "#ff0000", color: "#fff", weight: 2, fillOpacity: 0.9
+                    }).addTo(radarLayer);
+                    
+                    // Vérifier distance si on a notre position
+                    if (myPos) {
+                        let dist = map.distance(myPos, [radar.lat, radar.lon]);
+                        if (dist < 500) { // Alerte à 500 mètres
+                            triggerAlert();
+                        }
+                    }
                 });
-                document.getElementById('scanner-status').innerHTML = "Scanner Radar: Prêt";
-            } catch (error) {
-                document.getElementById('scanner-status').innerHTML = "Erreur Scan";
+            } catch (e) {}
+        }
+
+        function triggerAlert() {
+            let now = Date.now();
+            if (now - lastAlertTime > 5000) { // Un bip toutes les 5 secondes max
+                beep(880, 300);
+                setTimeout(() => beep(880, 300), 400); // Double bip
+                document.getElementById('alert-msg').style.display = 'block';
+                setTimeout(() => { document.getElementById('alert-msg').style.display = 'none'; }, 4000);
+                lastAlertTime = now;
             }
         }
 
-        // Relancer le scan quand on bouge la carte
-        map.on('moveend', fetchRadars);
-
-        // 3. Géolocalisation
+        // --- LOCALISATION ---
         map.locate({setView: true, watch: true, maxZoom: 16});
         map.on('locationfound', function(e) {
-            L.circle(e.latlng, 15, {color: 'white', fillColor: '#007AFF', fillOpacity: 0.8}).addTo(map);
+            myPos = e.latlng;
+            L.circle(e.latlng, 10, {color: '#007AFF', fillOpacity: 0.9}).addTo(map);
+            fetchRadars(); // Scan quand la position change
         });
 
-        // 4. Horloge
-        function updateClock() {
-            document.getElementById('clock').innerHTML = new Date().toLocaleTimeString('fr-FR');
-        }
-        setInterval(updateClock, 1000);
-        updateClock();
+        map.on('moveend', fetchRadars);
 
-        // Premier chargement
-        fetchRadars();
+        // Horloge
+        setInterval(() => { document.getElementById('clock').innerHTML = new Date().toLocaleTimeString('fr-FR'); }, 1000);
     </script>
 </body>
 </html>
