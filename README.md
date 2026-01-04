@@ -1,4 +1,4 @@
-# 🏎️ TeslaPilot V13 `Navigation & Radar Pro`
+# 🏎️ TeslaPilot `Navigation & Radar`
 
 > **Assistant de navigation PWA ultra-léger** inspiré de l'écosystème Tesla. Sécurité, fluidité et design *Glassmorphism* pour votre conduite.
 
