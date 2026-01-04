@@ -115,7 +115,7 @@
         }
 
         var mapMode = "north", myPos = null, currentBearing = 0, audioCtx = null, lastAlertTime = 0;
-        var map = L.map('map', { zoomControl: false, maxZoom: 18, preferCanvas: true }).setView([48.8566, 2.3522], 15);
+        var map = L.map('map', { zoomControl: false, maxZoom: 18, preferCanvas: true });
         var radarLayer = L.layerGroup().addTo(map);
         var carMarker = null;
 
