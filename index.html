@@ -103,14 +103,16 @@
     if(localStorage.getItem('teslaConfig')) { config = JSON.parse(localStorage.getItem('teslaConfig')); }
 
     var mapMode = "north", myPos = null, lastQueryPos = null, currentBearing = 0, audioCtx = null, lastAlertTime = 0;
+    
     var map = L.map('map', { 
-    zoomControl: false, 
-    maxZoom: 18, 
-    preferCanvas: true,
-    updateWhenIdle: false, // Force le chargement même pendant que tu bouges
-    updateInterval: 50,    // Rafraîchissement ultra-rapide
-    edgeBufferTiles: 3     // PRÉCHARGEMENT DE 3 RANGÉES (AUTOUR DE L'ÉCRAN)
-});
+        zoomControl: false, 
+        maxZoom: 18, 
+        preferCanvas: true,
+        updateWhenIdle: false,
+        updateInterval: 50,
+        edgeBufferTiles: 3 
+    });
+
     var radarLayer = L.layerGroup().addTo(map);
     var carMarker = null;
 
@@ -129,14 +131,6 @@
         g1.gain.setValueAtTime(config.volume, audioCtx.currentTime);
         g1.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
         osc1.start(); osc1.stop(audioCtx.currentTime + 0.15);
-
-        let osc2 = audioCtx.createOscillator(); let g2 = audioCtx.createGain();
-        osc2.connect(g2); g2.connect(audioCtx.destination);
-        osc2.frequency.value = 1100;
-        g2.gain.setValueAtTime(0, audioCtx.currentTime);
-        g2.gain.setValueAtTime(config.volume, audioCtx.currentTime + 0.15);
-        g2.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
-        osc2.start(audioCtx.currentTime + 0.15); osc2.stop(audioCtx.currentTime + 0.3);
     }
 
     function toggleSettings() {
@@ -169,7 +163,7 @@
 
     function updateProgressBar(dist) {
         const pct = Math.max(0, Math.min(100, (dist / config.distance) * 100));
-        document.getElementById('proxi-bar').style.width = (100 - pct) + "%"; // Inversé pour que la barre se remplisse en approchant
+        document.getElementById('proxi-bar').style.width = (100 - pct) + "%";
         document.getElementById('dist-text').innerText = Math.round(dist) + "m - RALENTIR";
     }
 
@@ -182,7 +176,6 @@
         map.panTo(myPos, { animate: true, duration: 1.0 });
         updateRotation();
 
-        // Ne télécharge les radars que si on a bougé de plus de 200m
         if (!lastQueryPos || map.distance(myPos, lastQueryPos) > 200) {
             fetchRadars();
             lastQueryPos = myPos;
@@ -198,12 +191,15 @@
 
     async function fetchRadars() {
         if (!myPos) return;
-        const b = map.getBounds().pad(0.5); // On prend un peu plus large que l'écran
+        const b = map.getBounds().pad(0.5);
         const url = "https://overpass-api.de/api/interpreter?data=" + encodeURIComponent(`[out:json];node["highway"="speed_camera"](${b.getSouth()},${b.getWest()},${b.getNorth()},${b.getEast()});out body;`);
         try {
             const res = await fetch(url);
             const data = await res.json();
             radarLayer.clearLayers();
+            
+            let alertActive = false; // <-- CORRECTION : Déclaration de la variable
+
             data.elements.forEach(r => {
                 const radarPos = L.latLng(r.lat, r.lon);
                 const dist = map.distance(myPos, radarPos);
@@ -213,22 +209,33 @@
                 if (dist < config.distance && isFacingRadar(currentBearing, myPos, radarPos)) {
                     updateProgressBar(dist);
                     triggerModal(r.tags.maxspeed || "??");
+                    alertActive = true; 
                 }
             });
+
+            if (!alertActive) {
+                document.getElementById('radar-modal').classList.remove('show');
+            }
+
         } catch (e) { console.error("Erreur radars:", e); }
     }
 
     function triggerModal(speed) {
-        if (Date.now() - lastAlertTime > 15000) {
+        const modal = document.getElementById('radar-modal');
+        if (!modal.classList.contains('show')) {
             beep();
             document.getElementById('modal-speed').innerHTML = speed;
-            document.getElementById('radar-modal').classList.add('show');
-            setTimeout(() => { document.getElementById('radar-modal').classList.remove('show'); }, 6000);
+            modal.classList.add('show');
             lastAlertTime = Date.now();
         }
     }
 
-    function triggerTest() { updateProgressBar(150); triggerModal(110); }
+    function triggerTest() { 
+        updateProgressBar(150); 
+        triggerModal(110); 
+        // Simule une fermeture auto après 3s pour le test uniquement
+        setTimeout(() => document.getElementById('radar-modal').classList.remove('show'), 3000);
+    }
 
     map.on('locationfound', (e) => { moveCar(e.latlng); });
     map.locate({ setView: true, watch: true, enableHighAccuracy: true });
