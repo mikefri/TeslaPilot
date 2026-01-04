@@ -3,10 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>TeslaPilot Sonar - Sat & Radar</title>
+    <title>TeslaPilot Precision - Sat & Sonar</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet-geometryutil@0.9.3/src/leaflet.geometryutil.min.js"></script>
     
     <style>
         :root { --tesla-red: #E81922; --glass: rgba(0, 0, 0, 0.85); }
@@ -20,7 +21,7 @@
             backdrop-filter: blur(10px);
         }
 
-        .btn { color: white; text-decoration: none; font-size: 14px; font-weight: bold; cursor: pointer; background: none; border: none; }
+        .btn { color: white; text-decoration: none; font-size: 14px; font-weight: bold; cursor: pointer; background: none; border: none; outline: none; }
         .btn-start { background: var(--tesla-red); padding: 5px 15px; border-radius: 15px; animation: pulse 2s infinite; }
 
         .status-panel {
@@ -28,7 +29,7 @@
             background: var(--glass); padding: 15px; border-radius: 12px;
             color: white; border-left: 4px solid var(--tesla-red);
         }
-        #alert-msg { color: #ff0000; font-weight: bold; display: none; margin-top: 5px; }
+        #alert-msg { color: #ff0000; font-weight: bold; display: none; margin-top: 5px; font-size: 18px; }
 
         @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(232, 25, 34, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(232, 25, 34, 0); } 100% { box-shadow: 0 0 0 0 rgba(232, 25, 34, 0); } }
     </style>
@@ -36,15 +37,15 @@
 <body>
 
     <div class="ui-overlay">
-        <button id="startBtn" class="btn btn-start" onclick="initAudio()">ACTIVER SONAR</button>
-        <button class="btn" onclick="map.locate({setView: true})">POSITION</button>
+        <button id="startBtn" class="btn btn-start" onclick="initAudio()">ACTIVER AUDIO</button>
+        <button class="btn" onclick="map.locate({setView: true})">MA POSITION</button>
         <a href="https://mikefri.github.io/Teslatv/" class="btn">TESLA TV</a>
     </div>
 
     <div class="status-panel">
-        <div style="font-size: 10px; color: var(--tesla-red);">TESLAPILOT V5</div>
+        <div style="font-size: 10px; color: var(--tesla-red); letter-spacing: 1px;">TRAJECTORY SCANNER ACTIVE</div>
         <span id="clock">00:00:00</span>
-        <div id="alert-msg">⚠️ RADAR PROCHE !</div>
+        <div id="alert-msg">⚠️ RADAR DEVANT !</div>
     </div>
 
     <div id="map"></div>
@@ -54,31 +55,31 @@
         var radarLayer = L.layerGroup().addTo(map);
         var audioCtx = null;
         var myPos = null;
+        var lastPos = null;
+        var currentBearing = 0;
         var lastAlertTime = 0;
 
-        // Fonds de carte
+        // Fonds de carte Satellite + Rues
         L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 }).addTo(map);
         L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png').addTo(map);
 
-        // --- GESTION AUDIO ---
+        // --- AUDIO ---
         function initAudio() {
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             document.getElementById('startBtn').style.display = 'none';
         }
 
-        function beep(freq = 660, duration = 200) {
+        function beep() {
             if (!audioCtx) return;
             let osc = audioCtx.createOscillator();
             let gain = audioCtx.createGain();
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-            osc.frequency.value = freq;
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.frequency.value = 880;
             gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-            osc.start();
-            osc.stop(audioCtx.currentTime + (duration/1000));
+            osc.start(); osc.stop(audioCtx.currentTime + 0.3);
         }
 
-        // --- SCAN RADARS ---
+        // --- SCANNER & LOGIQUE DIRECTIONNELLE ---
         async function fetchRadars() {
             const bounds = map.getBounds();
             const bbox = `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`;
@@ -91,14 +92,21 @@
                 radarLayer.clearLayers();
                 
                 data.elements.forEach(radar => {
-                    let marker = L.circleMarker([radar.lat, radar.lon], {
-                        radius: 8, fillColor: "#ff0000", color: "#fff", weight: 2, fillOpacity: 0.9
-                    }).addTo(radarLayer);
+                    let radarLatLng = [radar.lat, radar.lon];
+                    L.circleMarker(radarLatLng, { radius: 8, fillColor: "#ff0000", color: "#fff", weight: 2, fillOpacity: 0.9 }).addTo(radarLayer);
                     
-                    // Vérifier distance si on a notre position
-                    if (myPos) {
-                        let dist = map.distance(myPos, [radar.lat, radar.lon]);
-                        if (dist < 500) { // Alerte à 500 mètres
+                    if (myPos && lastPos) {
+                        let distance = map.distance(myPos, radarLatLng);
+                        
+                        // Calcul du cap du radar par rapport à nous
+                        let angleToRadar = L.GeometryUtil.getBearing(myPos, radarLatLng);
+                        
+                        // Différence entre notre direction et la position du radar
+                        let diff = Math.abs(currentBearing - angleToRadar);
+                        if (diff > 180) diff = 360 - diff;
+
+                        // ALERTE : Moins de 500m ET dans un angle de 40° devant
+                        if (distance < 500 && diff < 40) {
                             triggerAlert();
                         }
                     }
@@ -108,26 +116,31 @@
 
         function triggerAlert() {
             let now = Date.now();
-            if (now - lastAlertTime > 5000) { // Un bip toutes les 5 secondes max
-                beep(880, 300);
-                setTimeout(() => beep(880, 300), 400); // Double bip
+            if (now - lastAlertTime > 6000) { 
+                beep(); setTimeout(beep, 400);
                 document.getElementById('alert-msg').style.display = 'block';
-                setTimeout(() => { document.getElementById('alert-msg').style.display = 'none'; }, 4000);
+                setTimeout(() => { document.getElementById('alert-msg').style.display = 'none'; }, 5000);
                 lastAlertTime = now;
             }
         }
 
-        // --- LOCALISATION ---
+        // --- GEOLOCALISATION ---
         map.locate({setView: true, watch: true, maxZoom: 16});
+        
         map.on('locationfound', function(e) {
+            if (myPos) {
+                // Calcule la direction entre l'ancienne et la nouvelle position
+                currentBearing = L.GeometryUtil.getBearing(myPos, e.latlng);
+                lastPos = myPos;
+            }
             myPos = e.latlng;
+            
+            // Marqueur voiture (bleu)
             L.circle(e.latlng, 10, {color: '#007AFF', fillOpacity: 0.9}).addTo(map);
-            fetchRadars(); // Scan quand la position change
+            fetchRadars();
         });
 
         map.on('moveend', fetchRadars);
-
-        // Horloge
         setInterval(() => { document.getElementById('clock').innerHTML = new Date().toLocaleTimeString('fr-FR'); }, 1000);
     </script>
 </body>
