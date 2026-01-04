@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>TeslaPilot V11 - Navigation Pro</title>
+    <title>TeslaPilot V12 - Full Ultra Edition</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -14,20 +14,22 @@
         body, html { margin: 0; padding: 0; height: 100%; background: #000; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
         #map { position: absolute; top: 0; bottom: 0; width: 100%; z-index: 1; background: #000; }
 
+        /* Menu Supérieur */
         .ui-overlay {
             position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
             z-index: 1000; display: flex; gap: 10px; background: rgba(0,0,0,0.85);
             padding: 10px 20px; border-radius: 50px; backdrop-filter: blur(15px); border: 1px solid rgba(255,255,255,0.1);
         }
         .btn { color: white; text-decoration: none; font-size: 13px; font-weight: bold; cursor: pointer; background: none; border: none; outline: none; }
-        .btn-start { background: var(--tesla-red); padding: 5px 15px; border-radius: 15px; }
+        .btn-start { background: var(--tesla-red); padding: 5px 15px; border-radius: 15px; box-shadow: 0 0 15px rgba(232, 25, 34, 0.4); }
 
-        /* MODAL XXL */
+        /* MODAL XXL CENTRÉE */
         #radar-modal {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0.5);
             width: 420px; background: var(--glass); border: 5px solid var(--tesla-red);
             border-radius: 35px; padding: 40px; z-index: 9999; color: white; text-align: center;
             opacity: 0; visibility: hidden; transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 0 100px rgba(0,0,0,1), 0 0 30px rgba(232, 25, 34, 0.3);
         }
         #radar-modal.show { transform: translate(-50%, -50%) scale(1); opacity: 1; visibility: visible; }
         
@@ -37,119 +39,159 @@
             font-size: 60px; font-weight: 900; margin: 25px auto; background: white; color: black;
         }
 
-        /* STYLE DE LA FLÈCHE ROUGE (NAV) */
-        .car-marker {
-            transition: transform 0.5s ease; /* Pour que la rotation soit fluide */
-            filter: drop-shadow(0 0 5px rgba(0,0,0,0.5));
-        }
+        /* NAVIGATION CAR MARKER (FLÈCHE ROUGE) */
+        .car-marker { transition: transform 0.4s ease-out; }
 
-        /* RADARS */
+        /* RADARS STYLE & ANIMATION */
+        .radar-container { display: flex; align-items: center; justify-content: center; }
         .radar-icon-bg {
             background: var(--tesla-red); border-radius: 50%; border: 2px solid white;
-            width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;
+            width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
         }
-        .is-alerting .radar-icon-bg { animation: blink 0.5s infinite alternate; transform: scale(1.3); }
-        @keyframes blink { from { background: var(--tesla-red); } to { background: #fff; } }
+        .is-alerting .radar-icon-bg {
+            animation: radar-blink 0.5s infinite alternate;
+            transform: scale(1.4);
+            box-shadow: 0 0 25px #ff0000;
+        }
+        @keyframes radar-blink { from { background: var(--tesla-red); } to { background: #fff; } }
 
         .status-panel {
             position: absolute; bottom: 30px; left: 30px; z-index: 1000;
-            background: var(--glass); padding: 12px; border-radius: 12px; color: white;
+            background: var(--glass); padding: 12px 20px; border-radius: 15px;
+            color: white; border-left: 5px solid var(--tesla-red); backdrop-filter: blur(10px);
         }
     </style>
 </head>
 <body>
 
     <div id="radar-modal">
-        <div style="font-size: 22px; color: var(--tesla-red); font-weight: 900;">⚠️ RADAR DÉTECTÉ ⚠️</div>
+        <div style="font-size: 22px; color: var(--tesla-red); font-weight: 900; letter-spacing: 1px;">⚠️ ALERTE RADAR ⚠️</div>
         <div class="speed-circle-xxl" id="modal-speed">--</div>
-        <div style="font-size: 18px; font-weight: bold;">LIMITE DE VITESSE</div>
+        <div style="font-size: 18px; font-weight: bold; opacity: 0.9;">RALENTIR IMMÉDIATEMENT</div>
     </div>
 
     <div class="ui-overlay">
-        <button id="startBtn" class="btn btn-start" onclick="initAudio()">DÉMARRER</button>
-        <button class="btn" onclick="map.locate({setView: true})">POSITION</button>
+        <button id="startBtn" class="btn btn-start" onclick="initAudio()">ACTIVER SYSTÈME</button>
+        <button class="btn" onclick="map.locate({setView: true})">MA POSITION</button>
+        <button class="btn" onclick="triggerTest()" style="opacity:0.3; font-size:10px;">TEST ALERT</button>
+    </div>
+
+    <div class="status-panel">
+        <div style="font-size: 10px; color: var(--tesla-red); font-weight: bold;">TESLAPILOT V12 FULL</div>
+        <span id="clock" style="font-size:22px; font-weight:bold;">00:00:00</span>
     </div>
 
     <div id="map"></div>
 
     <script>
-        var map = L.map('map', { zoomControl: false, maxZoom: 18, preferCanvas: true }).setView([48.8566, 2.3522], 15);
+        // --- INITIALISATION CARTE ---
+        var map = L.map('map', { 
+            zoomControl: false, maxZoom: 18, minZoom: 6, preferCanvas: true, fadeAnimation: false 
+        }).setView([48.8566, 2.3522], 15);
+
         var radarLayer = L.layerGroup().addTo(map);
-        var carMarker = null; // Stocke notre flèche rouge
+        var carMarker = null; 
         var audioCtx = null, myPos = null, lastPos = null, currentBearing = 0, lastAlertTime = 0;
 
-        // Fonds Satellite stables
-        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 18, keepBuffer: 15 }).addTo(map);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', { maxZoom: 18 }).addTo(map);
+        // --- TÉLÉCHARGEMENT AGRESSIF (SATELLITE) ---
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            maxZoom: 18, updateWhenIdle: false, keepBuffer: 15, preload: true
+        }).addTo(map);
 
-        // --- ICONE DE LA FLÈCHE ROUGE ---
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', { 
+            maxZoom: 18, keepBuffer: 10 
+        }).addTo(map);
+
+        // --- ICONES ---
         const carSvg = `
-            <svg width="40" height="40" viewBox="0 0 100 100" style="transform: rotate(0deg)">
-                <circle cx="50" cy="50" r="35" fill="rgba(0, 122, 255, 0.2)" />
+            <svg width="45" height="45" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="35" fill="rgba(0, 122, 255, 0.1)" />
                 <path d="M50 10 L85 85 L50 70 L15 85 Z" fill="#E81922" stroke="white" stroke-width="5" stroke-linejoin="round" />
             </svg>`;
 
-        const carIcon = L.divIcon({
-            html: `<div class="car-marker" id="car-nav">${carSvg}</div>`,
-            className: '',
-            iconSize: [40, 40],
-            iconAnchor: [20, 20]
-        });
+        const radarSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M23 7L16 12L23 17V7Z" fill="white"/><path d="M1 5C1 3.89543 1.89543 3 3 3H14C15.1046 3 16 3.89543 16 5V19C16 20.1046 15.1046 21 14 21H3C1.89543 21 1 20.1046 1 19V5Z" fill="white"/></svg>`;
 
-        function initAudio() { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); document.getElementById('startBtn').innerHTML = "SYSTEM OK"; }
-        function beep() { if (!audioCtx) return; let osc = audioCtx.createOscillator(); let gain = audioCtx.createGain(); osc.connect(gain); gain.connect(audioCtx.destination); osc.frequency.value = 880; gain.gain.setValueAtTime(0.1, audioCtx.currentTime); osc.start(); osc.stop(audioCtx.currentTime + 0.3); }
+        // --- FONCTIONS SYSTÈME ---
+        function initAudio() {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            document.getElementById('startBtn').innerHTML = "SYSTEM READY ✅";
+            document.getElementById('startBtn').style.opacity = "0.5";
+        }
+
+        function beep() {
+            if (!audioCtx) return;
+            let osc = audioCtx.createOscillator();
+            let gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.frequency.value = 880;
+            gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+        }
 
         async function fetchRadars() {
             const b = map.getBounds();
-            const url = "https://overpass-api.de/api/interpreter?data=" + encodeURIComponent(`[out:json];node["highway"="speed_camera"](${b.getSouth()},${b.getWest()},${b.getNorth()},${b.getEast()});out body;`);
+            const bbox = `${b.getSouth()},${b.getWest()},${b.getNorth()},${b.getEast()}`;
+            const url = "https://overpass-api.de/api/interpreter?data=" + encodeURIComponent(`[out:json];node["highway"="speed_camera"](${bbox});out body;`);
             try {
                 const res = await fetch(url); const data = await res.json();
                 radarLayer.clearLayers();
                 data.elements.forEach(r => {
-                    let m = L.marker([r.lat, r.lon], { icon: L.divIcon({ html: `<div class="radar-container" id="r-${r.id}"><div class="radar-icon-bg"><svg width="15" height="15" viewBox="0 0 24 24" fill="white"><path d="M23 7L16 12L23 17V7Z"/><path d="M1 5C1 3.89543 1.89543 3 3 3H14C15.1046 3 16 3.89543 16 5V19C16 20.1046 15.1046 21 14 21H3C1.89543 21 1 20.1046 1 19V5Z"/></svg></div></div>`, className: '', iconSize: [30, 30] }) }).addTo(radarLayer);
+                    let rLatLng = [r.lat, r.lon];
+                    let m = L.marker(rLatLng, { 
+                        icon: L.divIcon({ html: `<div class="radar-container" id="r-${r.id}"><div class="radar-icon-bg">${radarSvg}</div></div>`, className: '', iconSize: [40, 40] }) 
+                    }).addTo(radarLayer);
+                    
                     if (myPos) {
-                        let dist = map.distance(myPos, [r.lat, r.lon]);
-                        let angle = L.GeometryUtil.getBearing(myPos, [r.lat, r.lon]);
+                        let dist = map.distance(myPos, rLatLng);
+                        let angle = L.GeometryUtil.getBearing(myPos, rLatLng);
                         let diff = Math.abs(currentBearing - angle);
-                        if (dist < 500 && (diff < 40 || diff > 320)) triggerModal(r.tags.maxspeed || "??", r.id);
+                        if (diff > 180) diff = 360 - diff;
+                        if (dist < 500 && diff < 45) triggerModal(r.tags.maxspeed || "??", r.id);
                     }
                 });
             } catch (e) {}
         }
 
         function triggerModal(speed, id) {
-            if (Date.now() - lastAlertTime > 15000) {
+            let now = Date.now();
+            if (now - lastAlertTime > 15000) { 
                 beep(); setTimeout(beep, 400);
+                const el = document.getElementById(`r-${id}`);
+                if (el) el.parentElement.parentElement.classList.add('is-alerting');
                 document.getElementById('modal-speed').innerHTML = speed;
                 document.getElementById('radar-modal').classList.add('show');
-                setTimeout(() => { document.getElementById('radar-modal').classList.remove('show'); }, 7000);
-                lastAlertTime = Date.now();
+                setTimeout(() => { 
+                    document.getElementById('radar-modal').classList.remove('show');
+                    if (el) el.parentElement.parentElement.classList.remove('is-alerting');
+                }, 7000);
+                lastAlertTime = now;
             }
         }
 
-        map.on('locationfound', (e) => {
-            if (myPos) {
-                currentBearing = L.GeometryUtil.getBearing(myPos, e.latlng);
-                lastPos = myPos;
-            }
-            myPos = e.latlng;
+        function triggerTest() { triggerModal(110, "test"); }
 
-            // Mise à jour ou création de la Flèche de Navigation
+        // --- SUIVI GPS ---
+        map.on('locationfound', (e) => {
+            if (myPos) { currentBearing = L.GeometryUtil.getBearing(myPos, e.latlng); }
+            myPos = e.latlng;
+            
             if (!carMarker) {
-                carMarker = L.marker(e.latlng, { icon: carIcon, zIndexOffset: 1000 }).addTo(map);
+                carMarker = L.marker(e.latlng, { 
+                    icon: L.divIcon({ html: `<div class="car-marker" id="car-nav">${carSvg}</div>`, className: '', iconSize: [45, 45], iconAnchor: [22, 22] }) 
+                }).addTo(map);
             } else {
                 carMarker.setLatLng(e.latlng);
-                // On fait pivoter la flèche dans l'élément HTML
                 const el = document.getElementById('car-nav');
                 if (el) el.style.transform = `rotate(${currentBearing}deg)`;
             }
-
             map.panTo(e.latlng, { animate: true, duration: 1.0 });
             fetchRadars();
         });
 
         map.locate({setView: true, watch: true, maxZoom: 17, enableHighAccuracy: true});
         map.on('moveend', fetchRadars);
+        setInterval(() => { document.getElementById('clock').innerHTML = new Date().toLocaleTimeString('fr-FR'); }, 1000);
     </script>
 </body>
 </html>
