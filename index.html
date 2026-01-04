@@ -224,7 +224,15 @@
                 const radarPos = L.latLng(r.lat, r.lon);
                 const dist = map.distance(myPos, radarPos);
                 
-                L.marker(radarPos, { icon: L.divIcon({ html: `<div style="background:var(--tesla-red);border-radius:50%;width:10px;height:10px;border:2px solid white"></div>`, className: '' }) }).addTo(radarLayer);
+                L.marker(radarPos, { 
+    pane: 'radarPane', 
+    icon: L.divIcon({ 
+        html: `<div style="background:var(--tesla-red); border-radius:50%; width:12px; height:12px; border:2px solid white; box-shadow: 0 0 5px rgba(0,0,0,0.5);"></div>`, 
+        className: '',
+        iconSize: [12, 12], // <--- Ajoute ça
+        iconAnchor: [6, 6]   // <--- Ajoute ça pour centrer le point
+    }) 
+}).addTo(radarLayer);
 
                 if (dist < config.distance && isFacingRadar(currentBearing, myPos, radarPos)) {
                     updateProgressBar(dist);
@@ -257,9 +265,43 @@
         setTimeout(() => document.getElementById('radar-modal').classList.remove('show'), 3000);
     }
 
-    map.on('locationfound', (e) => { moveCar(e.latlng); });
-    map.locate({ setView: true, watch: true, enableHighAccuracy: true });
-    setInterval(() => { document.getElementById('clock').innerHTML = new Date().toLocaleTimeString('fr-FR'); }, 1000);
+// 1. Initialisation de la carte
+var map = L.map('map', { 
+    zoomControl: false, 
+    maxZoom: 18, 
+    preferCanvas: true,
+    updateWhenIdle: false,
+    updateInterval: 50,
+    edgeBufferTiles: 3 
+});
+
+// 2. CRÉATION DE L'ÉTAGE RADAR (Z-Index supérieur)
+map.createPane('radarPane');
+map.getPane('radarPane').style.zIndex = 650; 
+map.getPane('radarPane').style.pointerEvents = 'none';
+
+// 3. Ajout des couches (Satellite + Labels)
+// Le satellite en fond
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 18 }).addTo(map);
+
+// Les noms des rues par-dessus le satellite (essentiel !)
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', { 
+    maxZoom: 18,
+    pane: 'shadowPane' // On le met dans un étage standard pour qu'il reste SOUS nos radars
+}).addTo(map);
+
+// 4. Initialisation des outils
+var radarLayer = L.layerGroup().addTo(map);
+var carMarker = null;
+
+// 5. Lancement du GPS
+map.on('locationfound', (e) => { moveCar(e.latlng); });
+map.locate({ setView: true, watch: true, enableHighAccuracy: true });
+
+// 6. Horloge
+setInterval(() => { 
+    document.getElementById('clock').innerHTML = new Date().toLocaleTimeString('fr-FR'); 
+}, 1000);
 </script>
 </body>
 </html>
