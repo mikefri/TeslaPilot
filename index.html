@@ -3,84 +3,119 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>TeslaPilot Satellite Live</title>
+    <title>TeslaPilot - Sat & Radar Live</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     
     <style>
-        :root { --tesla-red: #E81922; }
-        body, html { margin: 0; padding: 0; height: 100%; background: #000; font-family: 'Segoe UI', sans-serif; }
+        :root { --tesla-red: #E81922; --glass: rgba(0, 0, 0, 0.85); }
+        body, html { margin: 0; padding: 0; height: 100%; background: #000; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
         #map { position: absolute; top: 0; bottom: 0; width: 100%; z-index: 1; }
 
-        /* Menu style TeslaNav */
-        .top-bar {
+        /* Interface Tesla */
+        .ui-overlay {
             position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
-            z-index: 1000; display: flex; gap: 15px; background: rgba(0,0,0,0.85);
+            z-index: 1000; display: flex; gap: 15px; background: var(--glass);
             padding: 12px 25px; border-radius: 50px; border: 1px solid var(--tesla-red);
-            backdrop-filter: blur(10px);
+            backdrop-filter: blur(10px); box-shadow: 0 4px 15px rgba(0,0,0,0.5);
         }
 
-        .btn { color: white; text-decoration: none; font-size: 14px; font-weight: bold; cursor: pointer; background: none; border: none; }
+        .btn { color: white; text-decoration: none; font-size: 14px; font-weight: bold; cursor: pointer; background: none; border: none; outline: none; }
         .btn:hover { color: var(--tesla-red); }
-        .active { color: var(--tesla-red); }
-
-        .radar-blink {
-            position: absolute; bottom: 20px; right: 20px; z-index: 1000;
-            background: var(--tesla-red); color: white; padding: 8px 15px;
-            border-radius: 8px; font-size: 12px; font-weight: bold;
-            animation: pulse 1.5s infinite;
+        
+        .status-panel {
+            position: absolute; bottom: 30px; left: 30px; z-index: 1000;
+            background: var(--glass); padding: 15px; border-radius: 12px;
+            color: white; border-left: 4px solid var(--tesla-red);
         }
+        #clock { font-size: 22px; font-weight: bold; }
+        .scan-msg { font-size: 10px; color: var(--tesla-red); text-transform: uppercase; margin-bottom: 5px; }
 
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+        /* Style des radars */
+        .radar-icon {
+            background: var(--tesla-red); border: 2px solid white;
+            border-radius: 50%; box-shadow: 0 0 15px var(--tesla-red);
+        }
     </style>
 </head>
 <body>
 
-    <div class="top-bar">
-        <div class="btn active">SATELLITE LIVE</div>
+    <div class="ui-overlay">
+        <button class="btn" onclick="map.locate({setView: true, maxZoom: 16})">MA POSITION</button>
         <a href="https://mikefri.github.io/Teslatv/" class="btn">TESLA TV</a>
-        <a href="https://www.waze.com/fr/live-map" target="_blank" class="btn" style="background: #333; padding: 5px 10px; border-radius: 10px;">SIGNALER POLICE</a>
+        <a href="https://www.waze.com/fr/live-map" target="_blank" class="btn" style="color: #33ccff;">WAZE LIVE</a>
     </div>
 
-    <div class="radar-blink">📡 SCANNER RADARS ACTIF</div>
+    <div class="status-panel">
+        <div class="scan-msg" id="scanner-status">Scanner Radar: Actif</div>
+        <span id="clock">00:00:00</span>
+    </div>
 
     <div id="map"></div>
 
     <script>
-        // 1. Initialisation de la carte Satellite
+        // 1. Initialisation Carte
         var map = L.map('map', { zoomControl: false }).setView([48.8566, 2.3522], 14);
         
-        // Fond Satellite haute qualité (Esri) - Pas de blocage
+        // Fond Satellite ESRI (Gratuit et Stable)
         L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
             maxZoom: 19
         }).addTo(map);
 
-        // Noms des rues en blanc par-dessus
+        // Noms des rues (Labels)
         L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png').addTo(map);
 
-        // 2. Le "Moteur" Radar (Simulation de flux Waze OpenSource)
-        // On place des zones de vigilance là où sont les radars connus
-        var alertIcon = L.divIcon({
-            className: 'custom-div-icon',
-            html: "<div style='background-color:#E81922; width:12px; height:12px; border-radius:50%; border:2px solid white; box-shadow: 0 0 10px #ff0000;'></div>",
-            iconSize: [15, 15]
-        });
+        // 2. Système de détection des Radars (Overpass API)
+        var radarLayer = L.layerGroup().addTo(map);
 
-        // Fonction pour simuler la réception de données Waze (Radars fixes & zones)
-        function addAlert(lat, lon, type) {
-            L.marker([lat, lon], {icon: alertIcon}).addTo(map)
-             .bindPopup(`<b style="color:red">ALERTE ${type}</b><br>Données Temps Réel`);
+        async function fetchRadars() {
+            document.getElementById('scanner-status').innerHTML = "Scan en cours...";
+            const bounds = map.getBounds();
+            const bbox = `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`;
+            
+            // Requête OpenStreetMap pour les radars (speed_camera)
+            const query = `[out:json][timeout:25];node["highway"="speed_camera"](${bbox});out body;`;
+            const url = "https://overpass-api.de/api/interpreter?data=" + encodeURIComponent(query);
+
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                radarLayer.clearLayers();
+                
+                data.elements.forEach(radar => {
+                    L.circleMarker([radar.lat, radar.lon], {
+                        radius: 7,
+                        fillColor: "#ff0000",
+                        color: "#fff",
+                        weight: 2,
+                        fillOpacity: 1
+                    }).addTo(radarLayer).bindPopup(`<b>RADAR FIXE</b><br>Vitesse max: ${radar.tags.maxspeed || 'Inconnue'} km/h`);
+                });
+                document.getElementById('scanner-status').innerHTML = "Scanner Radar: Prêt";
+            } catch (error) {
+                document.getElementById('scanner-status').innerHTML = "Erreur Scan";
+            }
         }
 
-        // 3. Geoloc de la Tesla
+        // Relancer le scan quand on bouge la carte
+        map.on('moveend', fetchRadars);
+
+        // 3. Géolocalisation
         map.locate({setView: true, watch: true, maxZoom: 16});
         map.on('locationfound', function(e) {
-            L.circle(e.latlng, 10, {color: 'white', fillColor: '#007AFF', fillOpacity: 0.9}).addTo(map);
+            L.circle(e.latlng, 15, {color: 'white', fillColor: '#007AFF', fillOpacity: 0.8}).addTo(map);
         });
 
-        // Message de bienvenue
-        console.log("TeslaPilot V4 - Connecté au flux Satellite");
+        // 4. Horloge
+        function updateClock() {
+            document.getElementById('clock').innerHTML = new Date().toLocaleTimeString('fr-FR');
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // Premier chargement
+        fetchRadars();
     </script>
 </body>
 </html>
