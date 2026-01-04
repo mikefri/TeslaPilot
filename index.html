@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>TeslaPilot - Navigation & POI</title>
+    <title>TeslaPilot - Radar Overlay</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -17,7 +17,7 @@
         body { margin: 0; padding: 0; background: #000; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
         #map { position: absolute; top: 0; bottom: 0; width: 100%; z-index: 1; }
 
-        /* INTERFACE SUPÉRIEURE */
+        /* BARRE DE NAVIGATION */
         .pilot-nav {
             position: absolute;
             top: 20px;
@@ -29,8 +29,8 @@
             backdrop-filter: blur(15px);
             padding: 10px 20px;
             border-radius: 50px;
+            z-index: 2000;
             border: 1px solid rgba(255, 255, 255, 0.1);
-            z-index: 1000;
         }
 
         .btn {
@@ -41,111 +41,114 @@
             border-radius: 20px;
             cursor: pointer;
             font-size: 13px;
-            text-decoration: none;
             transition: 0.2s;
         }
 
-        .btn:hover { background: var(--tesla-red); }
+        .btn-alert { background: var(--tesla-red); font-weight: bold; }
+        .btn:hover { background: #fff; color: #000; }
 
-        /* PANNEAU INFOS */
+        /* IFRAME WAZE EN SUPERPOSITION */
+        #waze-overlay {
+            position: absolute;
+            top: 80px;
+            right: 20px;
+            width: 350px; /* Taille idéale pour l'écran Tesla */
+            height: 500px;
+            border-radius: 20px;
+            border: 2px solid var(--tesla-red);
+            overflow: hidden;
+            z-index: 1500;
+            display: none; /* Caché par défaut */
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+        }
+
+        iframe { width: 100%; height: 100%; border: none; }
+
+        /* BOUTON FERMER L'OVERLAY */
+        .close-waze {
+            position: absolute;
+            top: 90px;
+            right: 30px;
+            z-index: 1600;
+            background: var(--tesla-red);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            cursor: pointer;
+            display: none;
+        }
+
         .status {
             position: absolute;
             bottom: 30px;
             left: 30px;
             background: var(--glass);
-            padding: 15px;
+            padding: 12px;
             border-radius: 12px;
             color: white;
             z-index: 1000;
             border-left: 4px solid var(--tesla-red);
-            min-width: 150px;
-        }
-
-        #clock { font-size: 24px; font-weight: bold; display: block; }
-        .tag { font-size: 10px; color: var(--tesla-red); font-weight: bold; letter-spacing: 1px; }
-
-        /* PERSONNALISATION DU SÉLECTEUR DE VUE */
-        .leaflet-control-layers {
-            background: var(--glass) !important;
-            color: white !important;
-            border: 1px solid rgba(255, 255, 255, 0.2) !important;
-            border-radius: 12px !important;
         }
     </style>
 </head>
 <body>
 
     <nav class="pilot-nav">
-        <a href="https://www.waze.com/live-map" target="_blank" class="btn">Waze</a>
-        <a href="https://mikefri.github.io/Teslatv/" class="btn">Tesla TV</a>
+        <button class="btn btn-alert" onclick="toggleWaze()">MODE RADAR (WAZE)</button>
         <button class="btn" onclick="map.locate({setView: true, maxZoom: 16})">Ma Position</button>
+        <a href="https://mikefri.github.io/Teslatv/" class="btn">Tesla TV</a>
     </nav>
 
+    <button id="closeBtn" class="close-waze" onclick="toggleWaze()">✕</button>
+
+    <div id="waze-overlay">
+        <iframe src="https://www.waze.com/live-map/directions?latlng=48.8566%2C2.3522&zoom=13"></iframe>
+    </div>
+
     <div class="status">
-        <span class="tag">TESLAPILOT V2</span>
+        <div style="font-size: 10px; color: var(--tesla-red);">SYSTEM OK</div>
         <span id="clock">00:00:00</span>
     </div>
 
     <div id="map"></div>
 
     <script>
-        // 1. Initialisation de la carte
-        var map = L.map('map', { zoomControl: false }).setView([46.6033, 1.8883], 6);
-
-        // 2. Définition des fonds de carte
-        var satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-            maxZoom: 19
-        });
-
-        var streets = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19
-        });
-
-        // Noms des rues (Overlay pour la vue satellite)
-        var labels = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png');
-
-        // Ajouter la vue satellite par défaut
-        satellite.addTo(map);
-        labels.addTo(map);
-
-        // 3. Gestion des POI (Exemple : Bornes de recharge)
-        var rechargeGroup = L.layerGroup();
+        // Initialisation Carte Satellite
+        var map = L.map('map', { zoomControl: false }).setView([48.8566, 2.3522], 13);
         
-        // Icône personnalisée pour les bornes
-        var chargeIcon = L.icon({
-            iconUrl: 'https://cdn-icons-png.flaticon.com/512/355/355980.png', 
-            iconSize: [25, 25]
-        });
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            maxZoom: 19
+        }).addTo(map);
 
-        // Simulation de quelques bornes (On peut automatiser avec une API plus tard)
-        L.marker([48.8566, 2.3522], {icon: chargeIcon}).bindPopup("Borne Paris").addTo(rechargeGroup);
-        L.marker([45.7640, 4.8357], {icon: chargeIcon}).bindPopup("Borne Lyon").addTo(rechargeGroup);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png').addTo(map);
 
-        // 4. Ajout du sélecteur de couches (En haut à droite)
-        var baseMaps = {
-            "Vue Satellite": satellite,
-            "Vue Plan": streets
-        };
+        // Fonction pour afficher/masquer Waze
+        function toggleWaze() {
+            var waze = document.getElementById('waze-overlay');
+            var btn = document.getElementById('closeBtn');
+            if (waze.style.display === "none" || waze.style.display === "") {
+                waze.style.display = "block";
+                btn.style.display = "block";
+            } else {
+                waze.style.display = "none";
+                btn.style.display = "none";
+            }
+        }
 
-        var overlayMaps = {
-            "Noms des rues": labels,
-            "Bornes de recharge": rechargeGroup
-        };
-
-        L.control.layers(baseMaps, overlayMaps, {position: 'topright'}).addTo(map);
-
-        // 5. Géolocalisation
-        map.on('locationfound', function(e) {
-            L.circle(e.latlng, e.accuracy/2, {color: '#E81922'}).addTo(map);
-            L.marker(e.latlng).addTo(map).bindPopup("Votre Tesla").openPopup();
-        });
-
-        // 6. Horloge
+        // Horloge
         function updateClock() {
             document.getElementById('clock').innerHTML = new Date().toLocaleTimeString('fr-FR');
         }
         setInterval(updateClock, 1000);
         updateClock();
+
+        // Géolocalisation
+        map.locate({setView: true, maxZoom: 15});
+        map.on('locationfound', function(e) {
+            L.circle(e.latlng, 20, {color: '#E81922', fillOpacity: 0.5}).addTo(map);
+        });
     </script>
 </body>
 </html>
