@@ -3,19 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>TeslaPilot - Navigation GPS</title>
+    <title>TeslaPilot - Navigation Libre</title>
     
-    <link href="https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.css" rel="stylesheet">
-    <script src="https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     
     <style>
         :root {
             --tesla-red: #E81922;
-            --glass-bg: rgba(0, 0, 0, 0.8);
+            --glass-bg: rgba(0, 0, 0, 0.85);
         }
 
         body { margin: 0; padding: 0; background: #000; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
-        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; z-index: 1; }
 
         /* MENU NAVIGATION */
         .pilot-header {
@@ -24,86 +24,98 @@
             left: 50%;
             transform: translateX(-50%);
             display: flex;
-            gap: 10px;
+            gap: 12px;
             background: var(--glass-bg);
             backdrop-filter: blur(15px);
-            padding: 10px 20px;
+            padding: 10px 25px;
             border-radius: 50px;
             border: 1px solid rgba(255, 255, 255, 0.1);
             z-index: 100;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
         }
 
         .nav-btn {
             background: rgba(255, 255, 255, 0.1);
             border: none;
             color: white;
-            padding: 10px 20px;
-            border-radius: 25px;
+            padding: 8px 18px;
+            border-radius: 20px;
             cursor: pointer;
             font-size: 14px;
             text-decoration: none;
-            transition: 0.2s;
+            transition: 0.3s;
         }
 
         .nav-btn:hover { background: var(--tesla-red); }
 
-        /* PANEL INFOS */
+        /* STATUS BAR */
         .status-bar {
             position: absolute;
             bottom: 25px;
-            right: 25px;
+            left: 25px;
             background: var(--glass-bg);
             padding: 12px 20px;
             border-radius: 12px;
             color: white;
-            text-align: right;
             z-index: 90;
+            border-left: 4px solid var(--tesla-red);
         }
 
-        #clock { font-size: 22px; font-weight: bold; display: block; color: var(--tesla-red); }
+        #clock { font-size: 22px; font-weight: bold; color: #fff; }
+        .brand { font-size: 10px; color: var(--tesla-red); letter-spacing: 2px; font-weight: bold; }
+
+        /* Cacher le logo Leaflet pour faire plus propre */
+        .leaflet-control-attribution { display: none !important; }
     </style>
 </head>
 <body>
 
     <nav class="pilot-header">
-        <a href="#" class="nav-btn" onclick="location.reload()">Rafraîchir Carte</a>
-        <a href="https://www.waze.com/live-map" target="_blank" class="nav-btn">Ouvrir Waze</a>
+        <a href="https://www.waze.com/live-map" target="_blank" class="nav-btn">Waze</a>
         <a href="https://www.google.com/maps" target="_blank" class="nav-btn">Google Maps</a>
-        <a href="https://mikefri.github.io/Teslatv/guide.html" target="_blank" class="nav-btn">Guide Info</a>
+        <a href="https://mikefri.github.io/Teslatv/" class="nav-btn">Tesla TV</a>
     </nav>
 
     <div class="status-bar">
+        <div class="brand">TESLAPILOT FREE</div>
         <span id="clock">00:00:00</span>
-        <div style="font-size: 10px; color: #888;">TESLAPILOT NAV SYSTEM</div>
     </div>
 
     <div id="map"></div>
 
     <script>
-        mapboxgl.accessToken = 'TON_ACCESS_TOKEN_ICI';
+        // Initialisation de la carte (Centré sur la France par défaut)
+        var map = L.map('map', {
+            zoomControl: false,
+            attributionControl: false
+        }).setView([46.6033, 1.8883], 6);
 
-        const map = new mapboxgl.Map({
-            container: 'map',
-            style: 'mapbox://styles/mapbox/satellite-streets-v12',
-            center: [2.3522, 48.8566],
-            zoom: 15,
-            pitch: 60,
-            bearing: -10
-        });
+        // Ajout de la couche Satellite gratuite (Esri World Imagery)
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            maxZoom: 19
+        }).addTo(map);
+
+        // Ajout des noms de routes par-dessus (CartoDB Voyager Labels)
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', {
+            pane: 'shadowPane'
+        }).addTo(map);
+
+        // Géolocalisation automatique de la Tesla
+        map.locate({setView: true, maxZoom: 16});
+
+        function onLocationFound(e) {
+            var radius = e.accuracy / 2;
+            L.circle(e.latlng, radius, {color: '#E81922', fillOpacity: 0.2}).addTo(map);
+            L.marker(e.latlng).addTo(map).bindPopup("Vous êtes ici").openPopup();
+        }
+        map.on('locationfound', onLocationFound);
 
         // Horloge
-        function tick() {
+        function updateClock() {
             document.getElementById('clock').innerHTML = new Date().toLocaleTimeString('fr-FR');
         }
-        setInterval(tick, 1000);
-        tick();
-
-        // Géolocalisation auto
-        map.addControl(new mapboxgl.GeolocateControl({
-            positionOptions: { enableHighAccuracy: true },
-            trackUserLocation: true,
-            showUserHeading: true
-        }));
+        setInterval(updateClock, 1000);
+        updateClock();
     </script>
 </body>
 </html>
