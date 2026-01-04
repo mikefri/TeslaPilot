@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>TeslaPilot - Design Edition</title>
+    <title>TeslaPilot V8 - Ultra Alert</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -14,13 +14,12 @@
         body, html { margin: 0; padding: 0; height: 100%; background: #000; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
         #map { position: absolute; top: 0; bottom: 0; width: 100%; z-index: 1; }
 
-        /* Menu Supérieur */
+        /* Menu */
         .ui-overlay {
             position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
             z-index: 1000; display: flex; gap: 10px; background: rgba(0,0,0,0.85);
             padding: 10px 20px; border-radius: 50px; backdrop-filter: blur(15px); border: 1px solid rgba(255,255,255,0.1);
         }
-
         .btn { color: white; text-decoration: none; font-size: 13px; font-weight: bold; cursor: pointer; background: none; border: none; outline: none; }
         .btn-start { background: var(--tesla-red); padding: 5px 15px; border-radius: 15px; }
 
@@ -30,25 +29,32 @@
             width: 400px; background: var(--glass); border: 4px solid var(--tesla-red);
             border-radius: 30px; padding: 30px; z-index: 9999; color: white; text-align: center;
             opacity: 0; visibility: hidden; transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            box-shadow: 0 0 50px rgba(0,0,0,1);
+            box-shadow: 0 0 100px rgba(0,0,0,1);
         }
         #radar-modal.show { transform: translate(-50%, -50%) scale(1); opacity: 1; visibility: visible; }
-
         .speed-circle-xxl {
             width: 120px; height: 120px; border: 8px solid #E81922; border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
             font-size: 58px; font-weight: 900; margin: 20px auto; background: white; color: black;
         }
 
-        /* STYLE DE L'ICONE RADAR SUR LA CARTE */
-        .radar-custom-icon {
-            background: var(--tesla-red);
-            border-radius: 50%;
-            border: 2px solid white;
-            box-shadow: 0 0 10px rgba(232, 25, 34, 0.6);
-            display: flex;
-            align-items: center;
-            justify-content: center;
+        /* STYLE ICONE RADAR */
+        .radar-container { display: flex; align-items: center; justify-content: center; }
+        .radar-icon-bg {
+            background: var(--tesla-red); border-radius: 50%; border: 2px solid white;
+            width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;
+            transition: all 0.3s;
+        }
+
+        /* ANIMATION CLIGNOTANTE (Activee par JS) */
+        .is-alerting .radar-icon-bg {
+            animation: radar-pulse 0.5s infinite alternate;
+            box-shadow: 0 0 20px #ff0000;
+            transform: scale(1.3);
+        }
+        @keyframes radar-pulse {
+            from { background: var(--tesla-red); }
+            to { background: #fff; }
         }
 
         .status-panel {
@@ -61,19 +67,19 @@
 <body>
 
     <div id="radar-modal">
-        <div style="font-size: 20px; color: var(--tesla-red); font-weight: 900; text-transform: uppercase;">⚠️ RADAR PROCHE ⚠️</div>
+        <div style="font-size: 20px; color: var(--tesla-red); font-weight: 900; text-transform: uppercase;">⚠️ RADAR SUR VOTRE ROUTE ⚠️</div>
         <div class="speed-circle-xxl" id="modal-speed">--</div>
-        <div style="font-size: 16px; font-weight: bold;">LIMITE DE VITESSE</div>
+        <div style="font-size: 16px; font-weight: bold;">RALENTISSEZ</div>
     </div>
 
     <div class="ui-overlay">
-        <button id="startBtn" class="btn btn-start" onclick="initAudio()">ACTIVER SONAR</button>
-        <button class="btn" onclick="map.locate({setView: true})">MA POSITION</button>
-        <button class="btn" onclick="triggerModal(80)" style="opacity:0.5; font-size:10px;">TEST</button>
+        <button id="startBtn" class="btn btn-start" onclick="initAudio()">DÉMARRER TESLAPILOT</button>
+        <button class="btn" onclick="map.locate({setView: true})">POSITION</button>
+        <button class="btn" onclick="triggerTest()" style="opacity:0.3; font-size:10px;">TEST ALERT</button>
     </div>
 
     <div class="status-panel">
-        <div style="font-size: 10px; color: var(--tesla-red); font-weight: bold;">TESLAPILOT V7</div>
+        <div style="font-size: 10px; color: var(--tesla-red); font-weight: bold;">TESLAPILOT V8</div>
         <span id="clock" style="font-size:20px; font-weight:bold;">00:00:00</span>
     </div>
 
@@ -91,25 +97,19 @@
         L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 }).addTo(map);
         L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png').addTo(map);
 
-        // --- ICONE RADAR DESIGN (SVG) ---
-        const radarSvg = `
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M23 7L16 12L23 17V7Z" fill="white"/>
-                <path d="M1 5C1 3.89543 1.89543 3 3 3H14C15.1046 3 16 3.89543 16 5V19C16 20.1046 15.1046 21 14 21H3C1.89543 21 1 20.1046 1 19V5Z" fill="white"/>
-                <circle cx="8" cy="12" r="3" fill="#E81922"/>
-            </svg>`;
+        const radarSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M23 7L16 12L23 17V7Z" fill="white"/><path d="M1 5C1 3.89543 1.89543 3 3 3H14C15.1046 3 16 3.89543 16 5V19C16 20.1046 15.1046 21 14 21H3C1.89543 21 1 20.1046 1 19V5Z" fill="white"/></svg>`;
 
-        const radarIcon = L.divIcon({
-            html: `<div class="radar-custom-icon">${radarSvg}</div>`,
-            className: '',
-            iconSize: [30, 30],
-            iconAnchor: [15, 15]
-        });
+        function createRadarIcon(id) {
+            return L.divIcon({
+                html: `<div class="radar-container" id="radar-id-${id}"><div class="radar-icon-bg">${radarSvg}</div></div>`,
+                className: '', iconSize: [40, 40], iconAnchor: [20, 20]
+            });
+        }
 
         function initAudio() {
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            document.getElementById('startBtn').innerHTML = "SYSTEM READY";
-            document.getElementById('startBtn').style.background = "#333";
+            document.getElementById('startBtn').innerHTML = "SYSTÈME ACTIF";
+            document.getElementById('startBtn').style.opacity = "0.5";
         }
 
         function beep() {
@@ -135,7 +135,7 @@
                 
                 data.elements.forEach(radar => {
                     let radarLatLng = [radar.lat, radar.lon];
-                    L.marker(radarLatLng, { icon: radarIcon }).addTo(radarLayer);
+                    let marker = L.marker(radarLatLng, { icon: createRadarIcon(radar.id) }).addTo(radarLayer);
                     
                     if (myPos && lastPos) {
                         let distance = map.distance(myPos, radarLatLng);
@@ -144,23 +144,34 @@
                         if (diff > 180) diff = 360 - diff;
 
                         if (distance < 500 && diff < 40) {
-                            triggerModal(radar.tags.maxspeed || "??");
+                            triggerModal(radar.tags.maxspeed || "??", radar.id);
                         }
                     }
                 });
             } catch (e) {}
         }
 
-        function triggerModal(speed) {
+        function triggerModal(speed, radarId) {
             let now = Date.now();
             if (now - lastAlertTime > 15000) { 
                 beep(); setTimeout(beep, 400);
+                
+                // Activer l'animation sur l'icone du radar
+                const radarEl = document.getElementById(`radar-id-${radarId}`);
+                if (radarEl) radarEl.classList.add('is-alerting');
+
                 document.getElementById('modal-speed').innerHTML = speed;
                 document.getElementById('radar-modal').classList.add('show');
-                setTimeout(() => { document.getElementById('radar-modal').classList.remove('show'); }, 6000);
+                
+                setTimeout(() => {
+                    document.getElementById('radar-modal').classList.remove('show');
+                    if (radarEl) radarEl.classList.remove('is-alerting');
+                }, 7000);
                 lastAlertTime = now;
             }
         }
+
+        function triggerTest() { triggerModal(130, "test"); }
 
         map.locate({setView: true, watch: true, maxZoom: 16});
         map.on('locationfound', function(e) {
