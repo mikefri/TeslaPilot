@@ -3,151 +3,72 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>TeslaPilot - Radar Overlay</title>
+    <title>TeslaPilot - Navigation & Alerts</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     
     <style>
-        :root {
-            --tesla-red: #E81922;
-            --glass: rgba(0, 0, 0, 0.85);
-        }
-
+        :root { --tesla-red: #E81922; --glass: rgba(0, 0, 0, 0.85); }
         body { margin: 0; padding: 0; background: #000; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
         #map { position: absolute; top: 0; bottom: 0; width: 100%; z-index: 1; }
 
-        /* BARRE DE NAVIGATION */
+        /* MENU SUPERIEUR */
         .pilot-nav {
-            position: absolute;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            gap: 10px;
-            background: var(--glass);
-            backdrop-filter: blur(15px);
-            padding: 10px 20px;
-            border-radius: 50px;
-            z-index: 2000;
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 10px; background: var(--glass); backdrop-filter: blur(15px);
+            padding: 10px 20px; border-radius: 50px; z-index: 2000; border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .btn {
-            background: rgba(255, 255, 255, 0.1);
-            border: none;
-            color: white;
-            padding: 8px 16px;
-            border-radius: 20px;
-            cursor: pointer;
-            font-size: 13px;
-            transition: 0.2s;
+            background: rgba(255, 255, 255, 0.1); border: none; color: white;
+            padding: 10px 20px; border-radius: 25px; cursor: pointer; font-size: 13px;
+            text-decoration: none; font-weight: bold; transition: 0.2s;
         }
 
-        .btn-alert { background: var(--tesla-red); font-weight: bold; }
+        .btn-radar { background: var(--tesla-red); box-shadow: 0 0 15px rgba(232, 25, 34, 0.4); }
         .btn:hover { background: #fff; color: #000; }
 
-        /* IFRAME WAZE EN SUPERPOSITION */
-        #waze-overlay {
-            position: absolute;
-            top: 80px;
-            right: 20px;
-            width: 350px; /* Taille idéale pour l'écran Tesla */
-            height: 500px;
-            border-radius: 20px;
-            border: 2px solid var(--tesla-red);
-            overflow: hidden;
-            z-index: 1500;
-            display: none; /* Caché par défaut */
-            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+        /* INDICATEUR DE STATUT */
+        .status-box {
+            position: absolute; bottom: 30px; left: 30px;
+            background: var(--glass); padding: 15px; border-radius: 12px;
+            color: white; z-index: 1000; border-left: 4px solid var(--tesla-red);
         }
-
-        iframe { width: 100%; height: 100%; border: none; }
-
-        /* BOUTON FERMER L'OVERLAY */
-        .close-waze {
-            position: absolute;
-            top: 90px;
-            right: 30px;
-            z-index: 1600;
-            background: var(--tesla-red);
-            color: white;
-            border: none;
-            border-radius: 50%;
-            width: 30px;
-            height: 30px;
-            cursor: pointer;
-            display: none;
-        }
-
-        .status {
-            position: absolute;
-            bottom: 30px;
-            left: 30px;
-            background: var(--glass);
-            padding: 12px;
-            border-radius: 12px;
-            color: white;
-            z-index: 1000;
-            border-left: 4px solid var(--tesla-red);
-        }
+        #clock { font-size: 22px; font-weight: bold; }
     </style>
 </head>
 <body>
 
     <nav class="pilot-nav">
-        <button class="btn btn-alert" onclick="toggleWaze()">MODE RADAR (WAZE)</button>
-        <button class="btn" onclick="map.locate({setView: true, maxZoom: 16})">Ma Position</button>
-        <a href="https://mikefri.github.io/Teslatv/" class="btn">Tesla TV</a>
+        <a href="https://www.waze.com/ul?ll=48.8566,2.3522&navigate=yes&zoom=15" target="_blank" class="btn btn-radar">🚨 ACTIVER RADARS (WAZE)</a>
+        <button class="btn" onclick="map.locate({setView: true, maxZoom: 16})">MA POSITION</button>
+        <a href="https://mikefri.github.io/Teslatv/" class="btn">TESLA TV</a>
     </nav>
 
-    <button id="closeBtn" class="close-waze" onclick="toggleWaze()">✕</button>
-
-    <div id="waze-overlay">
-        <iframe src="https://www.waze.com/live-map/directions?latlng=48.8566%2C2.3522&zoom=13"></iframe>
-    </div>
-
-    <div class="status">
-        <div style="font-size: 10px; color: var(--tesla-red);">SYSTEM OK</div>
+    <div class="status-box">
+        <div style="font-size: 10px; color: var(--tesla-red); font-weight: bold; letter-spacing: 1px;">TESLAPILOT ACTIVE</div>
         <span id="clock">00:00:00</span>
     </div>
 
     <div id="map"></div>
 
     <script>
-        // Initialisation Carte Satellite
         var map = L.map('map', { zoomControl: false }).setView([48.8566, 2.3522], 13);
         
-        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-            maxZoom: 19
-        }).addTo(map);
-
+        // Couche Satellite (Esri)
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 }).addTo(map);
+        // Couche Labels (Rues)
         L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png').addTo(map);
 
-        // Fonction pour afficher/masquer Waze
-        function toggleWaze() {
-            var waze = document.getElementById('waze-overlay');
-            var btn = document.getElementById('closeBtn');
-            if (waze.style.display === "none" || waze.style.display === "") {
-                waze.style.display = "block";
-                btn.style.display = "block";
-            } else {
-                waze.style.display = "none";
-                btn.style.display = "none";
-            }
-        }
-
         // Horloge
-        function updateClock() {
-            document.getElementById('clock').innerHTML = new Date().toLocaleTimeString('fr-FR');
-        }
-        setInterval(updateClock, 1000);
-        updateClock();
+        function updateClock() { document.getElementById('clock').innerHTML = new Date().toLocaleTimeString('fr-FR'); }
+        setInterval(updateClock, 1000); updateClock();
 
-        // Géolocalisation
+        // Geoloc automatique
         map.locate({setView: true, maxZoom: 15});
         map.on('locationfound', function(e) {
-            L.circle(e.latlng, 20, {color: '#E81922', fillOpacity: 0.5}).addTo(map);
+            L.circle(e.latlng, 15, {color: var(--tesla-red), fillOpacity: 0.8}).addTo(map);
         });
     </script>
 </body>
