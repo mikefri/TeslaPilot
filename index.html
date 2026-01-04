@@ -59,6 +59,10 @@
         select, input[type="range"] { width: 100%; background: #222; color: white; border: 1px solid #444; padding: 10px; border-radius: 8px; }
 
         .status-panel { position: absolute; bottom: 30px; left: 30px; z-index: 1000; background: var(--glass); padding: 10px 20px; border-radius: 12px; color: white; border-left: 5px solid var(--tesla-red); }
+    @keyframes pulse {
+    0% { transform: scale(0.8); opacity: 0.8; }
+    100% { transform: scale(2.5); opacity: 0; }
+}
     </style>
 </head>
 <body>
@@ -213,12 +217,18 @@
                 
                 L.marker(radarPos, { 
     pane: 'radarPane', 
-    icon: L.divIcon({ 
-        html: `<div style="background:var(--tesla-red); border-radius:50%; width:12px; height:12px; border:2px solid white; box-shadow: 0 0 5px rgba(0,0,0,0.5);"></div>`, 
-        className: '',
-        iconSize: [12, 12], // <--- Ajoute ça
-        iconAnchor: [6, 6]   // <--- Ajoute ça pour centrer le point
-    }) 
+icon: L.divIcon({ 
+    html: `
+        <div style="display: flex; justify-content: center; align-items: center;">
+            <div style="position: absolute; width: 30px; height: 30px; background: rgba(232, 25, 34, 0.2); border-radius: 50%; animation: pulse 1.5s infinite;"></div>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 8V16M8 12H16M22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12Z" stroke="white" stroke-width="2" fill="#E81922"/>
+            </svg>
+        </div>`,
+    className: '',
+    iconSize: [30, 30],
+    iconAnchor: [15, 15]
+})
 }).addTo(radarLayer);
 
                 if (dist < config.distance && isFacingRadar(currentBearing, myPos, radarPos)) {
