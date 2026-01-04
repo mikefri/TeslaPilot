@@ -141,7 +141,6 @@
         function toggleSettings() {
             const m = document.getElementById('settings-modal');
             m.style.display = (m.style.display === 'block') ? 'none' : 'block';
-            // Init les inputs avec les valeurs actuelles
             document.getElementById('set-dist').value = config.distance;
             document.getElementById('val-dist').innerText = config.distance + "m";
             document.getElementById('set-vol').value = config.volume;
@@ -217,9 +216,28 @@
 
         function triggerTest() { triggerModal(110); }
 
-        map.on('locationfound', (e) => moveCar(e.latlng));
-        map.locate({setView: true, watch: true, enableHighAccuracy: true});
-        setInterval(() => { document.getElementById('clock').innerHTML = new Date().toLocaleTimeString('fr-FR'); }, 1000);
+        // --- CORRECTION GÉOLOCALISATION ---
+        map.on('locationfound', (e) => {
+            console.log("Position réelle reçue :", e.latlng);
+            moveCar(e.latlng);
+        });
+
+        map.on('locationerror', (e) => {
+            console.error("Erreur GPS :", e.message);
+        });
+
+        // Forçage des options de précision
+        map.locate({
+            setView: true, 
+            watch: true, 
+            enableHighAccuracy: true, // Utilise le GPS satellite (consomme plus mais précis)
+            maximumAge: 0,            // Interdit d'utiliser la dernière position connue en cache
+            timeout: 20000            // Laisse 20 secondes au GPS pour fixer le signal
+        });
+
+        setInterval(() => { 
+            document.getElementById('clock').innerHTML = new Date().toLocaleTimeString('fr-FR'); 
+        }, 1000);
     </script>
 </body>
 </html>
