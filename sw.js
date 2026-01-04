@@ -1,4 +1,4 @@
-const CACHE_NAME = 'teslapilot-v13';
+const CACHE_NAME = 'teslapilot-v1';
 const ASSETS = [
   './',
   './index.html',
