@@ -63,6 +63,7 @@
                 <option value="0.05">Faible</option>
                 <option value="0.15" selected>Normal</option>
                 <option value="0.3">Fort</option>
+                <option value="0.6">Très Fort</option>
             </select>
         </div>
 
@@ -126,17 +127,36 @@
 
         function initAudio() { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); document.getElementById('startBtn').style.display = 'none'; }
         
-        function beep() { 
-            if (!audioCtx || !config.soundEnabled) return; 
-            let osc = audioCtx.createOscillator(); 
-            let gain = audioCtx.createGain(); 
-            osc.connect(gain); 
-            gain.connect(audioCtx.destination); 
-            osc.frequency.value = 880; 
-            gain.gain.setValueAtTime(config.volume, audioCtx.currentTime); 
-            osc.start(); 
-            osc.stop(audioCtx.currentTime + 0.3); 
-        }
+function beep() { 
+    if (!audioCtx || !config.soundEnabled) return; 
+
+    // --- PREMIER BIP (Tonalité de base) ---
+    let osc1 = audioCtx.createOscillator(); 
+    let gain1 = audioCtx.createGain(); 
+    osc1.connect(gain1); 
+    gain1.connect(audioCtx.destination); 
+    
+    osc1.frequency.value = 880; // Note initiale
+    gain1.gain.setValueAtTime(config.volume, audioCtx.currentTime);
+    gain1.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+    
+    osc1.start(audioCtx.currentTime);
+    osc1.stop(audioCtx.currentTime + 0.15);
+
+    // --- DEUXIÈME BIP (Plus aigu, 0.15s plus tard) ---
+    let osc2 = audioCtx.createOscillator(); 
+    let gain2 = audioCtx.createGain(); 
+    osc2.connect(gain2); 
+    gain2.connect(audioCtx.destination); 
+    
+    osc2.frequency.value = 1100; // Plus aigu pour l'urgence
+    gain2.gain.setValueAtTime(0, audioCtx.currentTime); // Silence au début
+    gain2.gain.setValueAtTime(config.volume, audioCtx.currentTime + 0.15);
+    gain2.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+    
+    osc2.start(audioCtx.currentTime + 0.15);
+    osc2.stop(audioCtx.currentTime + 0.3); 
+}
 
         function toggleSettings() {
             const m = document.getElementById('settings-modal');
