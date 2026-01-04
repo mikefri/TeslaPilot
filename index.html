@@ -3,46 +3,78 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>TeslaPilot Precision - Modal Fix</title>
+    <title>TeslaPilot - Alerte XXL</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/leaflet-geometryutil@0.9.3/src/leaflet.geometryutil.min.js"></script>
     
     <style>
-        :root { --tesla-red: #E81922; --glass: rgba(0, 0, 0, 0.9); }
+        :root { --tesla-red: #E81922; --glass: rgba(0, 0, 0, 0.95); }
         body, html { margin: 0; padding: 0; height: 100%; background: #000; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
         #map { position: absolute; top: 0; bottom: 0; width: 100%; z-index: 1; }
 
         /* Menu Supérieur */
         .ui-overlay {
             position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
-            z-index: 1000; display: flex; gap: 10px; background: var(--glass);
-            padding: 10px 20px; border-radius: 50px; border: 1px solid rgba(255,255,255,0.1);
-            backdrop-filter: blur(15px);
+            z-index: 1000; display: flex; gap: 10px; background: rgba(0,0,0,0.8);
+            padding: 10px 20px; border-radius: 50px; backdrop-filter: blur(10px);
         }
 
         .btn { color: white; text-decoration: none; font-size: 13px; font-weight: bold; cursor: pointer; background: none; border: none; outline: none; }
         .btn-start { background: var(--tesla-red); padding: 5px 15px; border-radius: 15px; }
-        .btn-test { border: 1px solid #555; padding: 5px 10px; border-radius: 15px; font-size: 11px; opacity: 0.7; }
+        .btn-test { border: 1px solid #555; padding: 5px 10px; border-radius: 15px; font-size: 11px; }
 
-        /* MODAL ALERTE - Cachée par défaut (top: -200px) */
+        /* MODAL ALERTE XXL CENTRÉE */
         #radar-modal {
-            position: absolute; top: -200px; left: 50%; transform: translateX(-50%);
-            width: 280px; background: var(--glass); border: 2px solid var(--tesla-red);
-            border-radius: 20px; padding: 15px; z-index: 5000; color: white;
-            text-align: center; backdrop-filter: blur(20px);
-            transition: top 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-            box-shadow: 0 10px 50px rgba(0,0,0,1);
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.5); /* Centré et petit par défaut */
+            width: 450px; /* Plus large */
+            background: var(--glass);
+            border: 5px solid var(--tesla-red); /* Bordure plus épaisse */
+            border-radius: 30px;
+            padding: 40px;
+            z-index: 9999;
+            color: white;
+            text-align: center;
+            backdrop-filter: blur(25px);
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 0 100px rgba(0,0,0,1), 0 0 30px rgba(232, 25, 34, 0.4);
         }
         
-        /* Classe ajoutée pour l'afficher */
-        #radar-modal.show { top: 80px; }
+        /* Affichage de la modal */
+        #radar-modal.show {
+            transform: translate(-50%, -50%) scale(1); /* Zoom vers taille normale */
+            opacity: 1;
+            visibility: visible;
+        }
 
-        .speed-circle {
-            width: 60px; height: 60px; border: 5px solid #E81922; border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 24px; font-weight: bold; margin: 10px auto; background: white; color: black;
+        .speed-circle-xxl {
+            width: 140px;
+            height: 140px;
+            border: 10px solid #E81922;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 64px; /* Chiffre géant */
+            font-weight: 900;
+            margin: 20px auto;
+            background: white;
+            color: black;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.2);
+        }
+
+        .alert-text-xxl {
+            font-size: 24px;
+            color: var(--tesla-red);
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 2px;
         }
 
         .status-panel {
@@ -56,19 +88,19 @@
 <body>
 
     <div id="radar-modal">
-        <div style="font-size: 12px; color: var(--tesla-red); font-weight: bold; text-transform: uppercase;">Alerte Radar</div>
-        <div class="speed-circle" id="modal-speed">--</div>
-        <div style="font-size: 11px; opacity: 0.8;">Vitesse maximale détectée</div>
+        <div class="alert-text-xxl">⚠️ ALERTE RADAR ⚠️</div>
+        <div class="speed-circle-xxl" id="modal-speed">--</div>
+        <div style="font-size: 18px; font-weight: bold; opacity: 0.9;">LIMITE DE VITESSE</div>
     </div>
 
     <div class="ui-overlay">
         <button id="startBtn" class="btn btn-start" onclick="initAudio()">DÉMARRER SYSTÈME</button>
-        <button class="btn" onclick="map.locate({setView: true})">POSITION</button>
-        <button class="btn btn-test" onclick="triggerModal(80)">TEST TEST</button>
+        <button class="btn" onclick="map.locate({setView: true})">MA POSITION</button>
+        <button class="btn btn-test" onclick="triggerModal(110)">TEST MODAL XXL</button>
     </div>
 
     <div class="status-panel">
-        <div style="font-size: 9px; color: var(--tesla-red); font-weight: bold;">TESLAPILOT V6</div>
+        <div style="font-size: 9px; color: var(--tesla-red); font-weight: bold;">TESLAPILOT ELITE XXL</div>
         <span id="clock">00:00:00</span>
     </div>
 
@@ -88,8 +120,7 @@
 
         function initAudio() {
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            document.getElementById('startBtn').innerHTML = "SONAR ACTIF ✅";
-            document.getElementById('startBtn').style.background = "#222";
+            document.getElementById('startBtn').innerHTML = "SYSTEM OK ✅";
             document.getElementById('startBtn').disabled = true;
         }
 
@@ -99,7 +130,7 @@
             let gain = audioCtx.createGain();
             osc.connect(gain); gain.connect(audioCtx.destination);
             osc.frequency.value = 880;
-            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.2, audioCtx.currentTime); // Son un peu plus fort
             osc.start(); osc.stop(audioCtx.currentTime + 0.3);
         }
 
@@ -124,7 +155,6 @@
                         let diff = Math.abs(currentBearing - angleToRadar);
                         if (diff > 180) diff = 360 - diff;
 
-                        // Alerte : Moins de 500m et dans l'angle de trajectoire
                         if (distance < 500 && diff < 40) {
                             let speed = radar.tags.maxspeed || "??";
                             triggerModal(speed);
@@ -136,7 +166,6 @@
 
         function triggerModal(speed) {
             let now = Date.now();
-            // Délai de 15s entre deux alertes pour ne pas saturer
             if (now - lastAlertTime > 15000) { 
                 beep(); setTimeout(beep, 400);
                 document.getElementById('modal-speed').innerHTML = speed;
@@ -144,7 +173,7 @@
                 
                 setTimeout(() => {
                     document.getElementById('radar-modal').classList.remove('show');
-                }, 7000); 
+                }, 6000); // Reste 6 secondes
                 
                 lastAlertTime = now;
             }
