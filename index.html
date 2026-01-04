@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/leaflet-geometryutil@0.9.3/src/leaflet.geometryutil.min.js"></script>
+    <script src="https://unpkg.com/leaflet-edgebuffer@1.2.0/src/leaflet.edgebuffer.js"></script>
     
     <style>
         :root { --tesla-red: #E81922; --glass: rgba(0, 0, 0, 0.95); }
@@ -102,7 +103,14 @@
     if(localStorage.getItem('teslaConfig')) { config = JSON.parse(localStorage.getItem('teslaConfig')); }
 
     var mapMode = "north", myPos = null, lastQueryPos = null, currentBearing = 0, audioCtx = null, lastAlertTime = 0;
-    var map = L.map('map', { zoomControl: false, maxZoom: 18, preferCanvas: true });
+    var map = L.map('map', { 
+    zoomControl: false, 
+    maxZoom: 18, 
+    preferCanvas: true,
+    updateWhenIdle: false, // Force le chargement même pendant que tu bouges
+    updateInterval: 50,    // Rafraîchissement ultra-rapide
+    edgeBufferTiles: 3     // PRÉCHARGEMENT DE 3 RANGÉES (AUTOUR DE L'ÉCRAN)
+});
     var radarLayer = L.layerGroup().addTo(map);
     var carMarker = null;
 
