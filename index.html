@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TeslaPilot - Détecteur Radars (Démo)</title>
+    <title>TeslaPilot - Détecteur Radars (Démo Privée)</title>
     <style>
         body { 
             font-family: Arial, sans-serif; 
@@ -73,13 +73,14 @@
         }
         function deg2rad(deg) { return deg * (Math.PI / 180); }
 
-        // Normalise les champs selon ton JSON actuel
+        // Normalise les champs (compatible anciens/nouveaux formats)
         function getRadar(radarObj) {
             return {
-                type: radarObj["Type de radar"] || 'Inconnu',
-                vitesse: radarObj.VMA || 'Inconnue',
-                lat: parseFloat(radarObj.Latitude),
-                lon: parseFloat(radarObj.Longitude)
+                type: radarObj.type || radarObj["Type de radar"] || 'Inconnu',
+                vitesse: radarObj.vitesse || radarObj.VMA || '50',
+                direction: radarObj.direction || radarObj["Direction"] || 'Double sens',
+                lat: parseFloat(radarObj.lat || radarObj.Latitude),
+                lon: parseFloat(radarObj.lon || radarObj.Longitude)
             };
         }
 
@@ -91,22 +92,24 @@
                 const count = Object.keys(radars).length;
                 document.getElementById('status').innerHTML = `✅ ${count} radars chargés !<br>Prêt pour la démo.`;
                 initMap();
-                // Option : ajoute tous les radars sur la carte pour visu démo
+                // Ajoute tous les radars sur la carte (cercles rouges)
                 Object.entries(radars).forEach(([id, r]) => {
                     const rad = getRadar(r);
-                    L.circleMarker([rad.lat, rad.lon], {radius: 8, color: '#f00', fillOpacity: 0.8})
-                        .addTo(map)
-                        .bindPopup(`Radar ${id}<br>${rad.type}<br>${rad.vitesse} km/h`);
+                    if (rad.lat && rad.lon) {
+                        L.circleMarker([rad.lat, rad.lon], {radius: 8, color: '#f00', fillOpacity: 0.8})
+                            .addTo(map)
+                            .bindPopup(`Radar ${id}<br>${rad.type}<br>${rad.direction}<br>Limite ${rad.vitesse} km/h`);
+                    }
                 });
             })
             .catch(err => {
                 console.error(err);
-                document.getElementById('status').textContent = '❌ Erreur radars.json';
+                document.getElementById('status').textContent = '❌ Erreur radars.json – Vérifie le format';
             });
 
         // Carte Leaflet
         function initMap() {
-            map = L.map('map').setView([46.2276, 2.2137], 6);
+            map = L.map('map').setView([46.2276, 2.2137], 6); // Centre France
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '© OpenStreetMap'
             }).addTo(map);
@@ -123,8 +126,8 @@
 
                 // Mise à jour position sur carte
                 if (userMarker) userMarker.setLatLng([lat, lon]);
-                else userMarker = L.marker([lat, lon], {icon: L.icon({iconUrl: 'https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png', shadowUrl: null})})
-                    .addTo(map).bindPopup('🚙 Toi');
+                else userMarker = L.marker([lat, lon], {icon: L.icon({iconUrl: 'https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png'})})
+                    .addTo(map).bindPopup('🚙 Ta position');
                 map.setView([lat, lon], 13);
 
                 // Recherche radars proches
@@ -133,6 +136,7 @@
 
                 Object.entries(radars).forEach(([id, radarObj]) => {
                     const r = getRadar(radarObj);
+                    if (!r.lat || !r.lon) return;
                     const dist = getDistance(lat, lon, r.lat, r.lon);
 
                     if (dist < closestDist) {
@@ -140,12 +144,12 @@
                         closestId = id;
                         document.getElementById('nearest').style.display = 'block';
                         document.getElementById('nearest').innerHTML = 
-                            `🔴 Radar le plus proche : ${id}<br>${r.type} – ${r.vitesse} km/h<br>Distance : ${dist.toFixed(2)} km`;
+                            `🔴 Plus proche : Radar ${id}<br>${r.type} – ${r.direction}<br>Distance : ${dist.toFixed(2)} km (limite ${r.vitesse} km/h)`;
                     }
 
-                    // ALERTE PRÉCISE À 500 MÈTRES (comme demandé)
+                    // ALERTE À 500 MÈTRES
                     if (dist <= 0.5 && !lastAlerted.has(id)) {
-                        const msg = `🚨 RADAR IMMINENT ! ${r.type} à ${ (dist*1000).toFixed(0) } mètres (limite ${r.vitesse} km/h) !`;
+                        const msg = `🚨 RADAR IMMINENT ! ${r.type} (${r.direction}) à ${(dist*1000).toFixed(0)} mètres (limite ${r.vitesse} km/h) ! Ralentis !`;
                         alert(msg);
                         speak(msg);
                         lastAlerted.add(id);
