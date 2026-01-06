@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TeslaPilot V2 - Radar & Navigation</title>
+<title>TeslaPilot Réel - Radar & Navigation</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -24,7 +24,6 @@
 <body>
 
 <div id="map"></div>
-
 <div class="side-controls" id="controls"></div>
 
 <div id="radar-modal">
@@ -41,7 +40,8 @@
 let config = { distance:500, volume:0.15, soundEnabled:true };
 let followDirection = true;
 let userPos = null, carMarker = null, radarLayer = null;
-let bearing = 0, explorationMode = true;
+let bearing = 0, lastAlertTime = 0;
+let cachedRadars = [];
 
 /* INIT MAP */
 var map = L.map('map',{zoomControl:false,maxZoom:18});
@@ -81,10 +81,11 @@ function triggerModal(speed,dist){
   const modal = document.getElementById('radar-modal');
   document.getElementById('modal-speed').innerText = speed;
   document.getElementById('dist-text').innerText = Math.round(dist) + "m - RALENTIR";
-  if(!modal.classList.contains('show')){
+  if(Date.now() - lastAlertTime > 3000){ // cooldown 3s
     beep(); speakAlert(dist);
     modal.classList.add('show');
     setTimeout(()=>modal.classList.remove('show'),3000);
+    lastAlertTime = Date.now();
   }
 }
 
@@ -92,72 +93,81 @@ function triggerModal(speed,dist){
 function moveCar(latlng){
   if(userPos) bearing = L.GeometryUtil.getBearing(userPos,latlng);
   userPos = latlng;
-
   if(!carMarker){
     carMarker = L.marker(userPos,{icon:L.divIcon({html:`<div>${carSvg}</div>`,className:'',iconSize:[50,50],iconAnchor:[25,25]})}).addTo(map);
   }else{ carMarker.setLatLng(userPos); }
 
-  if(explorationMode && followDirection) map.setView(userPos,map.getZoom(),{animate:true});
+  if(followDirection) map.setView(userPos,map.getZoom(),{animate:true});
+
+  checkRadars();
 }
 
-/* FAKE RADARS FOR TEST (SIMULATION) */
-const radars = [
-  {lat:48.8566,lng:2.3522,speed:50},
-  {lat:48.8570,lng:2.3550,speed:90},
-  {lat:48.8585,lng:2.3600,speed:70}
-];
+/* FETCH RADARS VIA OVERPASS */
+async function fetchRadars(){
+  if(!userPos) return;
+  const b = map.getBounds().pad(0.5);
+  const url = "https://overpass-api.de/api/interpreter?data=" + encodeURIComponent(
+    `[out:json];node["highway"="speed_camera"](${b.getSouth()},${b.getWest()},${b.getNorth()},${b.getEast()});out body;`
+  );
+  try{
+    const res = await fetch(url);
+    const data = await res.json();
+    cachedRadars = data.elements.map(r=>({lat:r.lat,lng:r.lon,speed:r.tags.maxspeed||50}));
+    drawRadars();
+  }catch(e){ console.error("Erreur fetch radars",e); }
+}
 
-function checkRadars(){
+/* DESSIN RADARS */
+function drawRadars(){
   radarLayer.clearLayers();
-  radars.forEach(r=>{
+  cachedRadars.forEach(r=>{
     const radarPos = L.latLng(r.lat,r.lng);
-    L.marker(radarPos,{icon:L.divIcon({html:`<div style="background:rgba(255,0,0,0.2);width:30px;height:30px;border-radius:50%;"></div>`,className:'',iconSize:[30,30],iconAnchor:[15,15]})}).addTo(radarLayer);
-    const dist = map.distance(userPos,radarPos);
-    let diff = Math.abs(bearing-L.GeometryUtil.getBearing(userPos,radarPos));
-    if(diff>180) diff = 360-diff;
-    if(dist<config.distance && diff<30) triggerModal(r.speed,dist);
+    L.marker(radarPos,{
+      icon:L.divIcon({
+        html:`<div style="background:rgba(255,0,0,0.2);width:30px;height:30px;border-radius:50%;"></div>`,
+        className:'', iconSize:[30,30], iconAnchor:[15,15]
+      })
+    }).addTo(radarLayer);
   });
 }
 
-/* SIMULATION TRAJECTORY */
-let idx=0;
-const path=[{lat:48.8565,lng:2.352},{lat:48.857,lng:2.353},{lat:48.8575,lng:2.354},{lat:48.858,lng:2.355},{lat:48.8585,lng:2.356}];
-function simulate(){
-  if(idx>=path.length) idx=0;
-  moveCar(L.latLng(path[idx].lat,path[idx].lng));
-  checkRadars();
-  idx++;
-  setTimeout(simulate,1000);
+/* CHECK RADARS */
+function checkRadars(){
+  if(!userPos) return;
+  cachedRadars.forEach(r=>{
+    const radarPos = L.latLng(r.lat,r.lng);
+    const dist = map.distance(userPos,radarPos);
+    let diff = Math.abs(bearing-L.GeometryUtil.getBearing(userPos,radarPos));
+    if(diff>180) diff = 360-diff;
+    if(dist<config.distance && diff<30){
+      triggerModal(r.speed,dist);
+    }
+  });
 }
+
+/* GPS */
+if(navigator.geolocation){
+  navigator.geolocation.watchPosition(pos=>{
+    moveCar(L.latLng(pos.coords.latitude,pos.coords.longitude));
+  }, err=>console.error(err), {enableHighAccuracy:true, maximumAge:1000, timeout:5000});
+}else{ alert("GPS non disponible"); }
 
 /* BOUTONS */
 const controls = document.getElementById('controls');
-
-const btnAudio = document.createElement('button');
-btnAudio.className='side-btn'; btnAudio.innerText='🔊';
-btnAudio.onclick=()=>initAudio();
-controls.appendChild(btnAudio);
-
-const btnNorth = document.createElement('button');
-btnNorth.className='side-btn'; btnNorth.innerText='🧭';
-btnNorth.onclick=()=>{ followDirection=!followDirection; alert("Orientation " + (followDirection?"SENS":"NORD")); };
-controls.appendChild(btnNorth);
-
-const btnRecenter = document.createElement('button');
-btnRecenter.className='side-btn'; btnRecenter.innerText='📍';
-btnRecenter.onclick=()=>{ if(userPos) map.setView(userPos,map.getZoom(),{animate:true}); };
-controls.appendChild(btnRecenter);
+const btnAudio = document.createElement('button'); btnAudio.className='side-btn'; btnAudio.innerText='🔊'; btnAudio.onclick=()=>initAudio(); controls.appendChild(btnAudio);
+const btnNorth = document.createElement('button'); btnNorth.className='side-btn'; btnNorth.innerText='🧭'; btnNorth.onclick=()=>{ followDirection=!followDirection; alert("Orientation "+(followDirection?"SENS":"NORD")); }; controls.appendChild(btnNorth);
+const btnRecenter = document.createElement('button'); btnRecenter.className='side-btn'; btnRecenter.innerText='📍'; btnRecenter.onclick=()=>{ if(userPos) map.setView(userPos,map.getZoom(),{animate:true}); }; controls.appendChild(btnRecenter);
 
 /* CLOCK */
 setInterval(()=>document.getElementById('clock').innerText=new Date().toLocaleTimeString('fr-FR'),1000);
 
-/* START SIMULATION */
-simulate();
+/* FETCH RADARS TO START */
+fetchRadars();
+/* REFRESH RADARS TOUTES LES 60s */
+setInterval(fetchRadars,60000);
 
-/* SERVICE WORKER FOR CACHE */
-if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('./sw.js').then(()=>console.log("SW OK"));
-}
+/* VIBRATION */
+function vibrate(){ if(navigator.vibrate) navigator.vibrate(200); }
 </script>
 </body>
 </html>
