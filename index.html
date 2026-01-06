@@ -3,171 +3,113 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TeslaPilot Réel - Radar & Navigation</title>
+<title>TeslaRadar</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/leaflet-geometryutil@0.9.3/src/leaflet.geometryutil.min.js"></script>
 
 <style>
-  :root { --tesla-red: #E81922; --glass: rgba(0,0,0,0.95); }
-  html, body { margin:0; padding:0; height:100%; background:#000; color:white; font-family:sans-serif; overflow:hidden; }
+  html, body { height: 100%; margin:0; }
   #map { width:100%; height:100%; }
-  .side-controls { position:absolute; top:20px; right:20px; z-index:2000; display:flex; flex-direction:column; gap:10px; }
-  .side-btn { width:50px; height:50px; border-radius:50%; background:var(--glass); border:1px solid rgba(255,255,255,0.2); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:20px; }
-  #radar-modal { position:absolute; top:40%; left:50%; transform:translate(-50%,-50%) scale(0.5); width:250px; background:var(--glass); border:4px solid var(--tesla-red); border-radius:25px; padding:20px; text-align:center; opacity:0; visibility:hidden; transition:all 0.3s ease; z-index:9999; }
-  #radar-modal.show { transform:translate(-50%,-50%) scale(1.2); opacity:1; visibility:visible; }
-  #proxi-bar { width:100%; height:12px; background:linear-gradient(90deg,#ff0000,#ffea00,#00ff00); border-radius:10px; transition:width 0.2s; }
-  #clock { position:absolute; bottom:20px; right:20px; font-size:22px; font-weight:bold; z-index:1000; background:rgba(0,0,0,0.6); padding:10px 15px; border-radius:15px; border-right:4px solid var(--tesla-red); }
+  .status-panel { position:absolute; bottom:10px; right:10px; background:rgba(0,0,0,0.6); color:white; padding:8px 12px; border-radius:10px; font-family:sans-serif; }
+  .side-btn { position:absolute; top:10px; right:10px; z-index:1000; background:#E81922; color:white; border:none; padding:8px 12px; border-radius:6px; cursor:pointer; }
 </style>
 </head>
 <body>
 
 <div id="map"></div>
-<div class="side-controls" id="controls"></div>
-
-<div id="radar-modal">
-  <div style="font-weight:bold; color:var(--tesla-red);">⚠️ RADAR ⚠️</div>
-  <div style="font-size:24px; margin:10px 0;" id="modal-speed">--</div>
-  <div id="dist-text">APPROCHE...</div>
-  <div id="proxi-bar"></div>
-</div>
-
-<div id="clock"></div>
+<div class="status-panel" id="clock">00:00:00</div>
+<button class="side-btn" id="recenterBtn">Recentrer</button>
 
 <script>
-/* CONFIG */
-let config = { distance:500, volume:0.15, soundEnabled:true };
-let followDirection = true;
-let userPos = null, carMarker = null, radarLayer = null;
-let bearing = 0, lastAlertTime = 0;
-let cachedRadars = [];
+let map = L.map('map', { zoomControl:false }).setView([48.8566,2.3522], 13); // Paris par défaut
 
-/* INIT MAP */
-var map = L.map('map',{zoomControl:false,maxZoom:18});
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-radarLayer = L.layerGroup().addTo(map);
+// Carte OSM
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap',
+    maxZoom: 19
+}).addTo(map);
 
-/* CAR ICON */
-const carSvg = `<svg width="50" height="50" viewBox="0 0 100 100"><path d="M50 10 L85 85 L50 70 L15 85 Z" fill="#E81922" stroke="white" stroke-width="5" stroke-linejoin="round"/></svg>`;
+// Marker voiture
+let carMarker = null;
+let myPos = null;
+let currentBearing = 0;
 
-/* AUDIO ALERT */
-let audioCtx=null;
-function initAudio(){
-  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  alert("Audio activé");
-}
+// Radar cache local
+let radarCache = [];
+
+// Audio beep
+let audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 function beep(){
-  if(!audioCtx || !config.soundEnabled) return;
-  let osc=audioCtx.createOscillator(), g=audioCtx.createGain();
-  osc.connect(g); g.connect(audioCtx.destination);
-  osc.frequency.value=880;
-  g.gain.setValueAtTime(config.volume,audioCtx.currentTime);
-  g.gain.exponentialRampToValueAtTime(0.01,audioCtx.currentTime+0.15);
-  osc.start(); osc.stop(audioCtx.currentTime+0.15);
+    let osc = audioCtx.createOscillator();
+    let gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime+0.2);
+    osc.start(); osc.stop(audioCtx.currentTime+0.2);
 }
 
-/* SPEECH */
-function speakAlert(dist){
-  if('speechSynthesis' in window){
-    const msg = new SpeechSynthesisUtterance("Radar dans " + Math.round(dist) + " mètres");
-    msg.lang="fr-FR";
-    window.speechSynthesis.speak(msg);
-  }
-}
+// Clock
+setInterval(()=>{document.getElementById('clock').innerText=new Date().toLocaleTimeString('fr-FR')},1000);
 
-/* RADAR MODAL */
-function triggerModal(speed,dist){
-  const modal = document.getElementById('radar-modal');
-  document.getElementById('modal-speed').innerText = speed;
-  document.getElementById('dist-text').innerText = Math.round(dist) + "m - RALENTIR";
-  if(Date.now() - lastAlertTime > 3000){ // cooldown 3s
-    beep(); speakAlert(dist);
-    modal.classList.add('show');
-    setTimeout(()=>modal.classList.remove('show'),3000);
-    lastAlertTime = Date.now();
-  }
-}
+// Recentrage
+document.getElementById('recenterBtn').onclick = () => {
+    if(myPos) map.setView(myPos, map.getZoom());
+};
 
-/* POSITION CAR */
-function moveCar(latlng){
-  if(userPos) bearing = L.GeometryUtil.getBearing(userPos,latlng);
-  userPos = latlng;
-  if(!carMarker){
-    carMarker = L.marker(userPos,{icon:L.divIcon({html:`<div>${carSvg}</div>`,className:'',iconSize:[50,50],iconAnchor:[25,25]})}).addTo(map);
-  }else{ carMarker.setLatLng(userPos); }
-
-  if(followDirection) map.setView(userPos,map.getZoom(),{animate:true});
-
-  checkRadars();
-}
-
-/* FETCH RADARS VIA OVERPASS */
-async function fetchRadars(){
-  if(!userPos) return;
-  const b = map.getBounds().pad(0.5);
-  const url = "https://overpass-api.de/api/interpreter?data=" + encodeURIComponent(
-    `[out:json];node["highway"="speed_camera"](${b.getSouth()},${b.getWest()},${b.getNorth()},${b.getEast()});out body;`
-  );
-  try{
-    const res = await fetch(url);
-    const data = await res.json();
-    cachedRadars = data.elements.map(r=>({lat:r.lat,lng:r.lon,speed:r.tags.maxspeed||50}));
-    drawRadars();
-  }catch(e){ console.error("Erreur fetch radars",e); }
-}
-
-/* DESSIN RADARS */
-function drawRadars(){
-  radarLayer.clearLayers();
-  cachedRadars.forEach(r=>{
-    const radarPos = L.latLng(r.lat,r.lng);
-    L.marker(radarPos,{
-      icon:L.divIcon({
-        html:`<div style="background:rgba(255,0,0,0.2);width:30px;height:30px;border-radius:50%;"></div>`,
-        className:'', iconSize:[30,30], iconAnchor:[15,15]
-      })
-    }).addTo(radarLayer);
-  });
-}
-
-/* CHECK RADARS */
-function checkRadars(){
-  if(!userPos) return;
-  cachedRadars.forEach(r=>{
-    const radarPos = L.latLng(r.lat,r.lng);
-    const dist = map.distance(userPos,radarPos);
-    let diff = Math.abs(bearing-L.GeometryUtil.getBearing(userPos,radarPos));
-    if(diff>180) diff = 360-diff;
-    if(dist<config.distance && diff<30){
-      triggerModal(r.speed,dist);
+// Simulation / GPS réel
+map.locate({watch:true, enableHighAccuracy:true});
+map.on('locationfound', e=>{
+    myPos = e.latlng;
+    // Calcul orientation
+    if(carMarker){
+        currentBearing = L.GeometryUtil.getBearing(carMarker.getLatLng(), myPos);
+        carMarker.setLatLng(myPos);
+        carMarker.setRotationAngle(currentBearing);
+    } else {
+        carMarker = L.marker(myPos, {rotationAngle:0, rotationOrigin:'center', icon: L.divIcon({className:'', html:'<div style="width:30px;height:30px;background:red;clip-path:polygon(50% 0%,0% 100%,100% 100%)"></div>', iconSize:[30,30]}) }).addTo(map);
     }
-  });
+    map.setView(myPos, map.getZoom());
+    checkRadars();
+});
+
+// Charger radars depuis Overpass ou cache
+async function loadRadars(){
+    if(radarCache.length) return radarCache;
+    const bounds = map.getBounds();
+    const url = 'https://overpass-api.de/api/interpreter?data='+
+        encodeURIComponent(`[out:json];node["highway"="speed_camera"](${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()});out body;`);
+    try{
+        let res = await fetch(url);
+        let data = await res.json();
+        radarCache = data.elements.map(r=>({lat:r.lat, lon:r.lon, maxspeed:r.tags.maxspeed||"??"}));
+        return radarCache;
+    }catch(e){console.error(e); return [];}
 }
 
-/* GPS */
-if(navigator.geolocation){
-  navigator.geolocation.watchPosition(pos=>{
-    moveCar(L.latLng(pos.coords.latitude,pos.coords.longitude));
-  }, err=>console.error(err), {enableHighAccuracy:true, maximumAge:1000, timeout:5000});
-}else{ alert("GPS non disponible"); }
+// Vérifie les radars proches et devant
+async function checkRadars(){
+    if(!myPos) return;
+    const radars = await loadRadars();
+    radars.forEach(r=>{
+        const radarPos = L.latLng(r.lat,r.lon);
+        const dist = map.distance(myPos, radarPos);
+        const bearing = L.GeometryUtil.getBearing(myPos, radarPos);
+        const diff = Math.abs(currentBearing - bearing)>180?360-Math.abs(currentBearing-bearing):Math.abs(currentBearing-bearing);
+        if(dist<500 && diff<45){ // 500m et devant
+            beep();
+            if(navigator.vibrate) navigator.vibrate(300);
+            L.circle(radarPos,{radius:20,color:'red',fillOpacity:0.3}).addTo(map);
+        }
+    });
+}
 
-/* BOUTONS */
-const controls = document.getElementById('controls');
-const btnAudio = document.createElement('button'); btnAudio.className='side-btn'; btnAudio.innerText='🔊'; btnAudio.onclick=()=>initAudio(); controls.appendChild(btnAudio);
-const btnNorth = document.createElement('button'); btnNorth.className='side-btn'; btnNorth.innerText='🧭'; btnNorth.onclick=()=>{ followDirection=!followDirection; alert("Orientation "+(followDirection?"SENS":"NORD")); }; controls.appendChild(btnNorth);
-const btnRecenter = document.createElement('button'); btnRecenter.className='side-btn'; btnRecenter.innerText='📍'; btnRecenter.onclick=()=>{ if(userPos) map.setView(userPos,map.getZoom(),{animate:true}); }; controls.appendChild(btnRecenter);
-
-/* CLOCK */
-setInterval(()=>document.getElementById('clock').innerText=new Date().toLocaleTimeString('fr-FR'),1000);
-
-/* FETCH RADARS TO START */
-fetchRadars();
-/* REFRESH RADARS TOUTES LES 60s */
-setInterval(fetchRadars,60000);
-
-/* VIBRATION */
-function vibrate(){ if(navigator.vibrate) navigator.vibrate(200); }
+// Mise à jour radar si on bouge
+map.on('moveend', ()=>{radarCache=[]; checkRadars();});
 </script>
+
 </body>
 </html>
