@@ -3,25 +3,49 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Détecteur de Radars</title>
+    <title>TeslaPilot - Détecteur de Radars Fixes en France</title>
     <style>
-        body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
-        #status { font-size: 18px; margin: 20px; }
-        #map { height: 400px; width: 100%; } /* Optionnel : pour une carte */
+        body { 
+            font-family: Arial, sans-serif; 
+            text-align: center; 
+            padding: 20px; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            margin: 0;
+        }
+        h1 { margin-bottom: 10px; }
+        #status { 
+            font-size: 18px; 
+            margin: 20px; 
+            padding: 15px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
+        }
+        #info { font-size: 14px; margin: 10px; opacity: 0.9; }
+        #map { height: 400px; width: 100%; margin-top: 20px; border-radius: 10px; }
+        button { padding: 10px 20px; font-size: 16px; margin: 10px; border: none; border-radius: 5px; background: #ff6b6b; color: white; cursor: pointer; }
+        button:hover { background: #ff5252; }
+        .nearest { background: #ffeb3b; color: black; padding: 10px; border-radius: 5px; margin: 10px; display: none; }
     </style>
 </head>
 <body>
-    <h1>Détecteur de Radars Fixes en France</h1>
-    <p id="status">Chargement des données...</p>
-    <div id="map"></div> <!-- Optionnel : ajoute une carte avec Leaflet ou Google Maps -->
+    <h1>🚗 TeslaPilot - Détecteur de Radars</h1>
+    <p id="info">Ouvre sur mobile, autorise GPS précis. Alerte à <500m. +2000 radars France (data.gouv.fr).</p>
+    <p id="status">Chargement des radars...</p>
+    <div id="nearest" class="nearest"></div>
+    <button onclick="startWatching()">Démarrer Surveillance</button>
+    <button onclick="stopWatching()">Arrêter</button>
+    <div id="map"></div>
 
     <script>
-        let radars = [];
-        let lastAlerted = new Set(); // Pour éviter alertes répétées
+        let radars = {};
+        let watchId = null;
+        let lastAlerted = new Set();
+        let map, userMarker;
 
         // Fonction distance Haversine (en km)
         function getDistance(lat1, lon1, lat2, lon2) {
-            const R = 6371; // Rayon Terre
+            const R = 6371;
             const dLat = deg2rad(lat2 - lat1);
             const dLon = deg2rad(lon2 - lon1);
             const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
@@ -31,74 +55,136 @@
             return R * c;
         }
 
-        function deg2rad(deg) {
-            return deg * (Math.PI / 180);
+        function deg2rad(deg) { return deg * (Math.PI / 180); }
+
+        // Normalise les champs du radar (gère anciens/nouveaux noms)
+        function getRadarProps(radar) {
+            return {
+                id: '', // Sera set par la clé
+                type: radar.type || radar["Type de radar"] || 'Inconnu',
+                date: radar.date || radar["Date de mise en service"] || 'Inconnue',
+                vitesse: radar.vitesse || radar.VMA || 'NA',
+                lat: parseFloat(radar.lat || radar.Latitude),
+                lon: parseFloat(radar.lon || radar.Longitude)
+            };
         }
 
-        // Charger les données radars
+        // Charger radars
         fetch('radars.json')
             .then(response => response.json())
             .then(data => {
                 radars = data;
-                document.getElementById('status').innerText = 'Données chargées. Surveillance en cours...';
-                startWatching();
+                const total = Object.keys(radars).length;
+                document.getElementById('status').innerHTML = `✅ ${total} radars chargés ! Prêt à surveiller.`;
+                initMap();
             })
             .catch(error => {
-                console.error('Erreur chargement radars:', error);
-                document.getElementById('status').innerText = 'Erreur chargement données.';
+                console.error('Erreur radars:', error);
+                document.getElementById('status').innerText = '❌ Erreur chargement radars.json. Vérifie le fichier.';
             });
 
-        // Surveiller la position
+        // Init carte Leaflet
+        function initMap() {
+            map = L.map('map').setView([46.603354, 1.888334], 6);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap'
+            }).addTo(map);
+            // Ajoute marqueurs radars (optionnel, commente si trop lent)
+            // Object.entries(radars).forEach(([id, radar]) => {
+            //     const props = getRadarProps(radar);
+            //     L.marker([props.lat, props.lon]).addTo(map)
+            //         .bindPopup(`Radar ${id}: ${props.type} (${props.vitesse} km/h)`);
+            // });
+        }
+
+        // Démarrer surveillance
         function startWatching() {
-            if (navigator.geolocation) {
-                navigator.geolocation.watchPosition(position => {
-                    const userLat = position.coords.latitude;
-                    const userLon = position.coords.longitude;
-                    const speed = position.coords.speed ? (position.coords.speed * 3.6).toFixed(0) : 'Inconnu'; // m/s to km/h
+            if (!navigator.geolocation) return alert('GPS non supporté.');
+            watchId = navigator.geolocation.watchPosition(updatePosition, gpsError, {
+                enableHighAccuracy: true,
+                timeout: 5000,
+                maximumAge: 0
+            });
+        }
 
-                    document.getElementById('status').innerText = `Position: ${userLat.toFixed(5)}, ${userLon.toFixed(5)} | Vitesse: ${speed} km/h`;
-
-                    radars.forEach(radar => {
-                        const dist = getDistance(userLat, userLon, parseFloat(radar.latitude), parseFloat(radar.longitude));
-                        if (dist < 0.5 && !lastAlerted.has(radar.id)) { // 500m, ajuste si besoin
-                            const message = `Attention ! Radar ${radar.type} à ${dist.toFixed(2)} km (vitesse max: ${radar.vitesse} km/h).`;
-                            alert(message);
-                            speak(message); // Alerte vocale
-                            lastAlerted.add(radar.id);
-                            setTimeout(() => lastAlerted.delete(radar.id), 60000); // Reset après 1 min
-                        }
-                    });
-                }, error => {
-                    console.error('Erreur géolocalisation:', error);
-                    document.getElementById('status').innerText = 'Erreur accès GPS. Autorise la localisation.';
-                }, { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 });
-            } else {
-                document.getElementById('status').innerText = 'Géolocalisation non supportée.';
+        function stopWatching() {
+            if (watchId) {
+                navigator.geolocation.clearWatch(watchId);
+                watchId = null;
+                document.getElementById('status').innerText = 'Surveillance arrêtée.';
             }
         }
 
-        // Alerte vocale
+        function updatePosition(position) {
+            const userLat = position.coords.latitude;
+            const userLon = position.coords.longitude;
+            const speed = position.coords.speed ? (position.coords.speed * 3.6).toFixed(0) : 'Inconnu';
+            document.getElementById('status').innerHTML = 
+                `📍 ${userLat.toFixed(5)}, ${userLon.toFixed(5)} | 🚀 ${speed} km/h | Vérification...`;
+
+            // Met à jour carte
+            if (map) {
+                if (userMarker) userMarker.setLatLng([userLat, userLon]);
+                else userMarker = L.marker([userLat, userLon]).addTo(map).bindPopup('Ta position');
+                map.setView([userLat, userLon], 12);
+            }
+
+            // Vérifie chaque radar
+            let nearestDist = Infinity;
+            let nearestRadar = null;
+            Object.entries(radars).forEach(([id, radarObj]) => {
+                const radar = getRadarProps(radarObj);
+                const dist = getDistance(userLat, userLon, radar.lat, radar.lon);
+                if (dist < nearestDist) {
+                    nearestDist = dist;
+                    nearestRadar = { id, ...radar };
+                }
+                if (dist < 0.5 && !lastAlerted.has(id)) { // 500m
+                    const message = `⚠️ ATTENTION ! Radar ${id} (${radar.type}) à ${dist.toFixed(0)}m (VMA: ${radar.vitesse} km/h). Ralentis !`;
+                    alert(message);
+                    speak(message);
+                    lastAlerted.add(id);
+                    setTimeout(() => lastAlerted.delete(id), 2 * 60 * 1000); // Reset 2min
+                }
+            });
+
+            // Affiche le plus proche
+            if (nearestRadar) {
+                const el = document.getElementById('nearest');
+                el.innerHTML = `📡 Plus proche: Radar ${nearestRadar.id} (${nearestRadar.type}) à ${nearestDist.toFixed(2)} km (${nearestRadar.vitesse} km/h)`;
+                el.style.display = 'block';
+            }
+        }
+
+        function gpsError(error) {
+            let msg = 'Erreur GPS: ';
+            switch(error.code) {
+                case error.PERMISSION_DENIED: msg += 'Accès refusé.'; break;
+                case error.POSITION_UNAVAILABLE: msg += 'Position indisponible.'; break;
+                default: msg += 'Timeout.';
+            }
+            document.getElementById('status').innerText = msg;
+        }
+
+        // Synthèse vocale
         function speak(text) {
             if ('speechSynthesis' in window) {
                 const utterance = new SpeechSynthesisUtterance(text);
                 utterance.lang = 'fr-FR';
+                utterance.volume = 1;
+                utterance.rate = 1.2;
                 window.speechSynthesis.speak(utterance);
             }
         }
+
+        // Auto-start sur mobile
+        if (/Mobi|Android/i.test(navigator.userAgent)) {
+            setTimeout(startWatching, 2000);
+        }
     </script>
 
-    <!-- Optionnel : Ajoute une carte avec Leaflet (CDN) -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
-    <script>
-        // Ajoute une carte simple (optionnel)
-        const map = L.map('map').setView([46.603354, 1.888334], 6); // Centre France
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap'
-        }).addTo(map);
-        
-        // Ajoute marqueurs radars (optionnel, mais lent pour 3400)
-        // radars.forEach(radar => L.marker([radar.latitude, radar.longitude]).addTo(map).bindPopup(radar.type));
-    </script>
+    <!-- Leaflet CDN -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </body>
 </html>
