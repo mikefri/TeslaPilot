@@ -3,137 +3,72 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<title>TeslaPilot V2 - Navigation & Radar</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<title>RadarCar</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/leaflet-geometryutil@0.9.3/src/leaflet.geometryutil.min.js"></script>
-
 <style>
-body, html { margin:0; padding:0; height:100%; background:#000; color:white; font-family:sans-serif; overflow:hidden;}
-#map { width:100%; height:100%; }
-.side-controls { position:absolute; top:20px; right:20px; display:flex; flex-direction:column; gap:10px; z-index:1000; }
-.side-btn { width:50px; height:50px; border-radius:50%; background:rgba(0,0,0,0.6); border:none; color:white; cursor:pointer; font-size:20px; display:flex; align-items:center; justify-content:center; }
-#radar-modal { position:absolute; top:40%; left:50%; transform:translate(-50%,-50%); width:250px; background:rgba(0,0,0,0.85); border:3px solid #E81922; border-radius:20px; text-align:center; padding:15px; display:none; z-index:2000;}
-#proxi-bar { height:10px; background:linear-gradient(90deg,#ff0000,#ffea00,#00ff00); width:100%; border-radius:5px; }
-.car-icon { width:50px; height:50px; }
+  html, body { margin:0; padding:0; height:100%; }
+  #map { width:100%; height:100%; }
+  .radar-alert { 
+    position: absolute; top:20%; left:50%; transform:translateX(-50%);
+    background:red; color:white; padding:20px; font-size:24px; border-radius:10px;
+    display:none;
+  }
+  .car-icon { width:40px; height:40px; background:red; clip-path: polygon(50% 0%, 0% 100%, 100% 100%); }
 </style>
 </head>
 <body>
+
 <div id="map"></div>
-
-<div class="side-controls">
-    <button id="btnOrientation" class="side-btn">N</button>
-    <button id="btnGPS" class="side-btn">📍</button>
-    <button id="btnRecenter" class="side-btn">🧭</button>
-    <button onclick="map.zoomIn()" class="side-btn">+</button>
-    <button onclick="map.zoomOut()" class="side-btn">-</button>
-</div>
-
-<div id="radar-modal">
-    <div>⚠️ RADAR ⚠️</div>
-    <div id="radar-speed" style="font-size:30px;margin:10px 0;">--</div>
-    <div class="proxi-container"><div id="proxi-bar"></div></div>
-</div>
+<div id="alert" class="radar-alert">RADAR 🚨</div>
 
 <script>
-// CONFIG
-let config = { distance:500, volume:0.15, soundEnabled:true };
-let mapMode = "north"; // north / direction
-let explorationMode = true;
-let myPos = null, currentBearing = 0;
-let carMarker = null;
-let radarLayer = null;
-let audioCtx = null;
+let map, carMarker, radars = [];
+const alertBox = document.getElementById('alert');
+const DETECTION_DISTANCE = 500; // en mètres
 
-// INIT MAP
-const map = L.map('map',{ zoomControl:false, maxZoom:18 }).setView([48.85,2.35],13);
+// Exemple de radars statiques (latitude, longitude, vitesse)
+radars = [
+  {lat:48.8584, lng:2.2945, speed:50}, // Tour Eiffel
+  {lat:48.8606, lng:2.3376, speed:30}, // Louvre
+];
 
-// TILES
-L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}').addTo(map);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png',{ pane:'shadowPane' }).addTo(map);
+// Initialisation carte
+map = L.map('map', { zoomControl:false }).setView([48.8584,2.2945], 16);
 
-// RADAR LAYER
-radarLayer = L.layerGroup().addTo(map);
+// Fond
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19 }).addTo(map);
 
-// CAR ICON
-const carSvg = `<svg class="car-icon" viewBox="0 0 100 100"><path d="M50 10 L85 85 L50 70 L15 85 Z" fill="#E81922" stroke="white" stroke-width="5" stroke-linejoin="round"/></svg>`;
+// Car marker
+const carIcon = L.divIcon({className:'car-icon', iconSize:[40,40], iconAnchor:[20,20]});
 
-// AUDIO
-function initAudio(){ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }
-function beep(){
-    if(!audioCtx||!config.soundEnabled) return;
-    let o = audioCtx.createOscillator();
-    let g = audioCtx.createGain();
-    o.connect(g); g.connect(audioCtx.destination);
-    o.frequency.value=880;
-    g.gain.setValueAtTime(config.volume,audioCtx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.01,audioCtx.currentTime+0.15);
-    o.start(); o.stop(audioCtx.currentTime+0.15);
+// Fonction déclenchement radar
+function checkRadars(pos) {
+  let alerted = false;
+  radars.forEach(r => {
+    const radarPos = L.latLng(r.lat, r.lng);
+    const dist = pos.distanceTo(radarPos);
+    if(dist < DETECTION_DISTANCE) alerted = true;
+  });
+  alertBox.style.display = alerted ? 'block' : 'none';
 }
 
-// MOVE CAR
-function moveCar(latlng, bearing=null){
-    myPos = latlng;
-    if(bearing!==null) currentBearing=bearing;
-    if(!carMarker){
-        carMarker = L.marker(myPos,{icon:L.divIcon({className:'',html:carSvg,iconSize:[50,50],iconAnchor:[25,25]})}).addTo(map);
-    } else carMarker.setLatLng(myPos);
-    
-    // CENTRER CARTE SI MODE EXPLORATION
-    if(explorationMode) map.setView(myPos,map.getZoom(),{animate:true});
-    
-    // ROTATION CARTE
-    if(mapMode=="direction"){
-        document.getElementById('map').style.transform=`rotate(${-currentBearing}deg)`;
-    } else {
-        document.getElementById('map').style.transform=`rotate(0deg)`;
-        carMarker.getElement().style.transform=`rotate(${currentBearing}deg)`;
-    }
-    
-    fetchRadars();
-}
+// Suivi GPS réel
+navigator.geolocation.watchPosition(pos => {
+  const latlng = L.latLng(pos.coords.latitude, pos.coords.longitude);
 
-// GPS WATCH
-map.locate({watch:true, setView:false, enableHighAccuracy:true});
-map.on('locationfound', e=> moveCar(e.latlng, e.heading||0));
+  // Mise à jour carte
+  if(!carMarker) {
+    carMarker = L.marker(latlng, {icon:carIcon}).addTo(map);
+  } else {
+    carMarker.setLatLng(latlng);
+  }
+  map.setView(latlng, map.getZoom(), {animate:true});
 
-// RADAR FETCH
-async function fetchRadars(){
-    if(!myPos) return;
-    const bounds = map.getBounds().pad(0.5);
-    const url = "https://overpass-api.de/api/interpreter?data="+encodeURIComponent(`[out:json];node["highway"="speed_camera"](${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()});out body;`);
-    try{
-        const res = await fetch(url);
-        const data = await res.json();
-        radarLayer.clearLayers();
-        let alert=false;
-        data.elements.forEach(r=>{
-            const pos=L.latLng(r.lat,r.lon);
-            const dist=map.distance(myPos,pos);
-            L.circleMarker(pos,{radius:8,color:'red',fillOpacity:0.6}).addTo(radarLayer);
-            if(dist<config.distance){ showRadarModal(r.tags.maxspeed||'??'); alert=true; }
-        });
-        if(!alert) document.getElementById('radar-modal').style.display='none';
-    } catch(e){ console.error(e);}
-}
+  // Vérification radars
+  checkRadars(latlng);
 
-// RADAR MODAL
-function showRadarModal(speed){
-    document.getElementById('radar-speed').innerText=speed;
-    document.getElementById('radar-modal').style.display='block';
-    beep();
-}
-
-// BUTTONS
-document.getElementById('btnOrientation').onclick=()=>{
-    mapMode = (mapMode=='north')?'direction':'north';
-    document.getElementById('btnOrientation').innerText = (mapMode=='north')?'N':'S';
-    moveCar(myPos,currentBearing);
-};
-document.getElementById('btnGPS').onclick=()=>{ if(myPos) map.setView(myPos,map.getZoom(),{animate:true}); };
-document.getElementById('btnRecenter').onclick=()=>{ explorationMode=true; if(myPos) map.setView(myPos,map.getZoom(),{animate:true}); };
-
+}, err => { console.error(err); }, { enableHighAccuracy:true, maximumAge:500, timeout:5000 });
 </script>
 </body>
 </html>
