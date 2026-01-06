@@ -2,36 +2,20 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Radar Voiture</title>
+<title>Radar Debug Desktop</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <style>
-html, body { margin:0; padding:0; height:100%; background:#000; }
+html, body { margin:0; height:100%; background:#000; }
 #map { width:100%; height:100%; }
 
 .car {
-  width:40px;
-  height:40px;
+  width:36px;
+  height:36px;
   background:#e81922;
   clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
-}
-
-#alert {
-  position:absolute;
-  top:20%;
-  left:50%;
-  transform:translateX(-50%);
-  background:#e81922;
-  color:white;
-  font-size:26px;
-  font-weight:bold;
-  padding:20px 30px;
-  border-radius:15px;
-  display:none;
-  z-index:1000;
 }
 
 .controls {
@@ -47,10 +31,24 @@ html, body { margin:0; padding:0; height:100%; background:#000; }
 .controls button {
   background:#111;
   color:white;
-  border:1px solid #444;
-  padding:10px;
-  border-radius:10px;
-  font-size:14px;
+  border:1px solid #555;
+  padding:10px 14px;
+  border-radius:8px;
+  cursor:pointer;
+}
+
+#alert {
+  position:absolute;
+  top:40%;
+  left:50%;
+  transform:translateX(-50%);
+  background:#e81922;
+  color:white;
+  font-size:28px;
+  padding:20px 30px;
+  border-radius:15px;
+  display:none;
+  z-index:1000;
 }
 </style>
 </head>
@@ -66,115 +64,72 @@ html, body { margin:0; padding:0; height:100%; background:#000; }
 </div>
 
 <script>
-let map, carMarker;
+const DETECT_DISTANCE = 400;
 let followCar = true;
-let lastRadarFetch = null;
+let carMarker;
 let radarLayer = L.layerGroup();
 const alertBox = document.getElementById('alert');
-const DETECT_DISTANCE = 500; // mètres
-let audioCtx;
 
-// INIT MAP
-map = L.map('map', { zoomControl:false }).setView([48.8566,2.3522], 15);
+// MAP
+const map = L.map('map').setView([48.8566, 2.3522], 14);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
 radarLayer.addTo(map);
 
-// AUDIO
-function beep(){
-  if(!audioCtx) audioCtx = new AudioContext();
-  const osc = audioCtx.createOscillator();
-  const gain = audioCtx.createGain();
-  osc.connect(gain);
-  gain.connect(audioCtx.destination);
-  osc.frequency.value = 900;
-  gain.gain.value = 0.2;
-  osc.start();
-  osc.stop(audioCtx.currentTime + 0.15);
-}
+// CAR INIT (Paris centre)
+const carPos = L.latLng(48.8566, 2.3522);
+carMarker = L.marker(carPos,{
+  icon:L.divIcon({
+    className:'',
+    html:'<div class="car"></div>',
+    iconSize:[36,36],
+    iconAnchor:[18,18]
+  })
+}).addTo(map);
 
-// RADARS OSM
-async function loadRadars(latlng){
-  if(lastRadarFetch && latlng.distanceTo(lastRadarFetch) < 300) return;
-  lastRadarFetch = latlng;
+// FAKE RADARS
+const radars = [
+  [48.8575,2.348],
+  [48.854,2.360],
+  [48.860,2.355],
+  [48.852,2.340]
+];
 
-  radarLayer.clearLayers();
-
-  const b = map.getBounds().pad(0.5);
-  const query = `
-  [out:json];
-  node["highway"="speed_camera"](${b.getSouth()},${b.getWest()},${b.getNorth()},${b.getEast()});
-  out;
-  `;
-  const url = "https://overpass-api.de/api/interpreter?data=" + encodeURIComponent(query);
-
-  const res = await fetch(url);
-  const data = await res.json();
-
-  data.elements.forEach(r=>{
-    const pos = L.latLng(r.lat, r.lon);
-    L.circleMarker(pos,{
-      radius:6,
-      color:'#fff',
-      fillColor:'#e81922',
-      fillOpacity:1
-    }).addTo(radarLayer);
-  });
-}
-
-// CHECK RADAR DISTANCE
-function checkRadars(pos){
-  let detected = false;
-  radarLayer.eachLayer(l=>{
-    const d = pos.distanceTo(l.getLatLng());
-    if(d < DETECT_DISTANCE){
-      detected = true;
-    }
-  });
-
-  if(detected){
-    alertBox.style.display = 'block';
-    beep();
-  } else {
-    alertBox.style.display = 'none';
-  }
-}
-
-// GPS SUIVI VOITURE
-navigator.geolocation.watchPosition(p=>{
-  const latlng = L.latLng(p.coords.latitude, p.coords.longitude);
-
-  if(!carMarker){
-    carMarker = L.marker(latlng,{
-      icon:L.divIcon({
-        className:'',
-        html:'<div class="car"></div>',
-        iconSize:[40,40],
-        iconAnchor:[20,20]
-      })
-    }).addTo(map);
-  } else {
-    carMarker.setLatLng(latlng);
-  }
-
-  if(followCar) map.setView(latlng, map.getZoom(), {animate:false});
-
-  loadRadars(latlng);
-  checkRadars(latlng);
-
-},err=>console.error(err),{
-  enableHighAccuracy:true,
-  maximumAge:500,
-  timeout:5000
+radars.forEach(r=>{
+  L.circleMarker(r,{
+    radius:6,
+    color:'#fff',
+    fillColor:'#e81922',
+    fillOpacity:1
+  }).addTo(radarLayer);
 });
 
+// MOVE CAR BY CLICK
+map.on('click',e=>{
+  carMarker.setLatLng(e.latlng);
+  if(followCar) map.setView(e.latlng);
+  checkRadar(e.latlng);
+});
+
+// RADAR CHECK
+function checkRadar(pos){
+  let danger = false;
+  radarLayer.eachLayer(r=>{
+    const d = pos.distanceTo(r.getLatLng());
+    if(d < DETECT_DISTANCE) danger = true;
+  });
+  alertBox.style.display = danger ? 'block' : 'none';
+}
+
 // CONTROLS
-function toggleFollow(){ followCar = !followCar; }
+function toggleFollow(){
+  followCar = !followCar;
+}
+
 function recenter(){
-  if(carMarker){
-    followCar = true;
-    map.setView(carMarker.getLatLng(), map.getZoom(), {animate:true});
-  }
+  followCar = true;
+  map.setView(carMarker.getLatLng(), map.getZoom());
 }
 </script>
+
 </body>
 </html>
