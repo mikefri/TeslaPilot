@@ -19136,10 +19136,10 @@
    "vitesse": 110
  },
  {
-   "lat": 46.9916,
-   "lon": 3.16732,
+   "lat": 46.99616,
+   "lon": 3.16778,
    "id": 15989,
-   "direction": "VARENNES VAUZELLES VERS CHALLUY",
+   "direction": "VARENNES VAUZELLES",
    "type": "Radar fixe",
    "vitesse": 50
  },
@@ -26799,4 +26799,5 @@
    "type": "Itinéraire",
    "vitesse": null
  }
+
 ]
