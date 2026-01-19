@@ -8,183 +8,288 @@
         body { 
             font-family: Arial, sans-serif; 
             text-align: center; 
-            padding: 20px; 
-            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            padding: 15px; 
+            background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
             color: white;
-            margin: 0;
+            margin: 0; transition: background 0.5s;
         }
-        h1 { margin-bottom: 10px; font-size: 24px; }
+        body.light { background: linear-gradient(135deg, #e0eafc 0%, #cfdef3 100%); color: #111; }
+        h1 { margin: 10px 0; font-size: 26px; }
         #status { 
-            font-size: 18px; 
-            margin: 20px; 
-            padding: 15px;
-            background: rgba(0,0,0,0.4);
-            border-radius: 10px;
+            font-size: 17px; margin: 15px; padding: 12px;
+            background: rgba(0,0,0,0.5); border-radius: 10px; 
         }
+        body.light #status { background: rgba(255,255,255,0.6); color: #000; }
         #nearest { 
-            background: #ff9800; 
-            color: black; 
-            padding: 12px; 
-            border-radius: 8px; 
-            margin: 15px; 
-            font-weight: bold;
-            display: none;
+            background: #ff5722; color: white; padding: 12px; 
+            border-radius: 10px; margin: 12px; font-weight: bold; display: none;
         }
-        #map { height: 450px; width: 100%; margin-top: 20px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        #map { height: 380px; width: 100%; margin: 15px 0; border-radius: 12px; box-shadow: 0 6px 15px rgba(0,0,0,0.6); }
         button { 
-            padding: 12px 24px; 
-            font-size: 18px; 
-            margin: 10px; 
-            border: none; 
-            border-radius: 8px; 
-            background: #f44336; 
-            color: white; 
-            cursor: pointer; 
+            padding: 10px 20px; font-size: 16px; margin: 6px; 
+            border: none; border-radius: 8px; cursor: pointer; color: white;
         }
-        button:hover { background: #d32f2f; }
-        .warning { font-size: 14px; color: #ffeb3b; margin: 20px; }
+        #start { background: #4caf50; } #stop { background: #f44336; } #toggleTheme { background: #673ab7; }
+        #testMode { background: #2196f3; }
+        .warning { font-size: 13px; color: #ffeb3b; margin: 10px; }
+        #history { margin: 15px; padding: 10px; background: rgba(0,0,0,0.4); border-radius: 10px; font-size: 14px; }
+        .toast { 
+            position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+            background: #d32f2f; color: white; padding: 14px 24px; border-radius: 12px;
+            z-index: 9999; font-size: 18px; box-shadow: 0 6px 20px rgba(0,0,0,0.7);
+            max-width: 90%; text-align: center; opacity: 0; transition: opacity 0.4s;
+        }
+        .toast.show { opacity: 1; }
     </style>
 </head>
-<body>
+<body class="dark">
     <h1>🚨 TeslaPilot - Détecteur Radars (Démo Privée)</h1>
-    <p class="warning">⚠️ Usage démonstration seulement – Positions exactes (interdit sur route ouverte en France)</p>
-    <p id="status">Chargement des radars...</p>
+    <p class="warning">⚠️ Démo seulement – Pas pour usage réel sur route ouverte en France</p>
+    <p id="status">Chargement...</p>
     <div id="nearest"></div>
-    <button onclick="startWatching()">▶️ Démarrer GPS</button>
-    <button onclick="stopWatching()">⏹️ Arrêter</button>
+    <button id="start" onclick="startWatching()">▶️ Démarrer</button>
+    <button id="stop" onclick="stopWatching()">⏹️ Arrêter</button>
+    <button id="toggleTheme">🌙 / ☀️ Thème</button>
+    <button id="testMode">🧪 Mode Test (simu)</button>
     <div id="map"></div>
+    <div id="history"><strong>Historique récent :</strong><br>Aucun</div>
 
     <script>
         let radars = {};
         let watchId = null;
         let lastAlerted = new Set();
-        let map, userMarker;
+        let map, userMarker, userCone;
+        let positionsBuffer = [];
+        let radarsPassedToday = 0;
+        let history = [];
+        let isTestMode = false;
+        let testInterval = null;
+        let lastCalcTime = 0;
+        let theme = localStorage.getItem('theme') || 'dark';
+        document.body.className = theme;
 
-        // Distance Haversine en km
-        function getDistance(lat1, lon1, lat2, lon2) {
-            const R = 6371;
-            const dLat = deg2rad(lat2 - lat1);
-            const dLon = deg2rad(lon2 - lon1);
-            const a = Math.sin(dLat / 2) ** 2 +
-                      Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
-                      Math.sin(dLon / 2) ** 2;
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-            return R * c;
-        }
-        function deg2rad(deg) { return deg * (Math.PI / 180); }
-
-        // Normalise les champs (compatible anciens/nouveaux formats)
-        function getRadar(radarObj) {
-            return {
-                type: radarObj.type || radarObj["Type de radar"] || 'Inconnu',
-                vitesse: radarObj.vitesse || radarObj.VMA || '50',
-                direction: radarObj.direction || radarObj["Direction"] || 'Double sens',
-                lat: parseFloat(radarObj.lat || radarObj.Latitude),
-                lon: parseFloat(radarObj.lon || radarObj.Longitude)
-            };
+        // Sons pitch différents
+        function speak(text, type = 'default') {
+            if ('speechSynthesis' in window) {
+                const utt = new SpeechSynthesisUtterance(text.replace(/🚨|🔴/g, ''));
+                utt.lang = 'fr-FR';
+                utt.rate = 1.15;
+                utt.volume = 1;
+                if (type === 'mobile') { utt.pitch = 1.4; utt.rate = 1.3; }
+                if (type === 'fixe') { utt.pitch = 0.9; }
+                speechSynthesis.speak(utt);
+            }
         }
 
-        // Chargement radars
-        fetch('radars.json')
-            .then(res => res.json())
-            .then(data => {
-                radars = data;
-                const count = Object.keys(radars).length;
-                document.getElementById('status').innerHTML = `✅ ${count} radars chargés !<br>Prêt pour la démo.`;
-                initMap();
-                // Ajoute tous les radars sur la carte (cercles rouges)
-                Object.entries(radars).forEach(([id, r]) => {
-                    const rad = getRadar(r);
-                    if (rad.lat && rad.lon) {
-                        L.circleMarker([rad.lat, rad.lon], {radius: 8, color: '#f00', fillOpacity: 0.8})
-                            .addTo(map)
-                            .bindPopup(`Radar ${id}<br>${rad.type}<br>${rad.direction}<br>Limite ${rad.vitesse} km/h`);
+        function showToast(msg, duration = 7000) {
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.textContent = msg;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.classList.add('show'), 100);
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 500);
+            }, duration);
+        }
+
+        // Cache radars.json
+        const CACHE_KEY = 'teslapilot_radars';
+        const CACHE_VERSION = 'v1.1'; // change pour forcer refresh
+
+        function loadRadars() {
+            const cached = localStorage.getItem(CACHE_KEY);
+            if (cached) {
+                try {
+                    const data = JSON.parse(cached);
+                    if (data.version === CACHE_VERSION) {
+                        radars = data.radars;
+                        document.getElementById('status').innerHTML = `✅ ${Object.keys(radars).length} radars (cache)`;
+                        initMapAndMarkers();
+                        return;
                     }
+                } catch(e) {}
+            }
+            fetch('radars.json')
+                .then(res => res.json())
+                .then(data => {
+                    radars = data;
+                    localStorage.setItem(CACHE_KEY, JSON.stringify({version: CACHE_VERSION, radars: data}));
+                    const count = Object.keys(radars).length;
+                    document.getElementById('status').innerHTML = `✅ ${count} radars chargés !`;
+                    initMapAndMarkers();
+                })
+                .catch(err => {
+                    document.getElementById('status').textContent = '❌ Erreur chargement radars.json';
                 });
-            })
-            .catch(err => {
-                console.error(err);
-                document.getElementById('status').textContent = '❌ Erreur radars.json – Vérifie le format';
-            });
+        }
 
-        // Carte Leaflet
-        function initMap() {
-            map = L.map('map').setView([46.2276, 2.2137], 6); // Centre France
+        const radarIcons = {
+            'Fixe': 'https://cdn-icons-png.flaticon.com/512/3063/3063170.png',
+            'Mobile': 'https://cdn-icons-png.flaticon.com/512/3063/3063095.png',
+            'Feu rouge': 'https://cdn-icons-png.flaticon.com/512/545/545705.png',
+            'Chantier': 'https://cdn-icons-png.flaticon.com/512/545/545707.png'
+        };
+
+        function initMapAndMarkers() {
+            map = L.map('map', { zoomAnimation: false, fadeAnimation: false }).setView([46.2276, 2.2137], 6);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '© OpenStreetMap'
             }).addTo(map);
+
+            Object.entries(radars).forEach(([id, obj]) => {
+                const r = getRadar(obj);
+                if (!r.lat || !r.lon) return;
+                const iconUrl = radarIcons[r.type] || 'https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png';
+                L.marker([r.lat, r.lon], {
+                    icon: L.icon({ iconUrl, iconSize: [36, 36], iconAnchor: [18, 36] })
+                }).addTo(map).bindPopup(`Radar ${id}<br>${r.type} – ${r.direction}<br>Limite ${r.vitesse} km/h`);
+            });
+        }
+
+        function getRadar(obj) {
+            return {
+                type: obj.type || obj["Type de radar"] || 'Inconnu',
+                vitesse: obj.vitesse || obj.VMA || '50',
+                direction: obj.direction || obj["Direction"] || 'Double sens',
+                lat: parseFloat(obj.lat || obj.Latitude),
+                lon: parseFloat(obj.lon || obj.Longitude)
+            };
+        }
+
+        function getDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2)**2 + Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) * Math.sin(dLon/2)**2;
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        }
+
+        function isApproaching(userLat, userLon, radarLat, radarLon, heading) {
+            if (typeof heading !== 'number' || heading < 0) return true;
+            const toDeg = (x) => x * 180 / Math.PI;
+            const bearing = toDeg(Math.atan2(radarLon - userLon, radarLat - userLat));
+            const diff = Math.abs((bearing - heading + 540) % 360 - 180);
+            return diff < 100; // cône ~100° devant
+        }
+
+        function updateHistory(id, type, dist) {
+            history.unshift({id, type, dist: dist.toFixed(1), time: new Date().toLocaleTimeString()});
+            if (history.length > 5) history.pop();
+            const histDiv = document.getElementById('history');
+            histDiv.innerHTML = '<strong>Historique récent :</strong><br>' + 
+                history.map(h => `${h.time} – ${h.type} ${h.id} (${h.dist} km)`).join('<br>') || 'Aucun';
         }
 
         function startWatching() {
-            if (!navigator.geolocation) return alert('GPS non supporté');
+            if (!navigator.geolocation) return showToast('GPS non supporté par ce navigateur');
             watchId = navigator.geolocation.watchPosition(pos => {
-                const lat = pos.coords.latitude;
-                const lon = pos.coords.longitude;
-                const speed = pos.coords.speed ? (pos.coords.speed * 3.6).toFixed(0) : '?';
+                const { latitude: lat, longitude: lon, speed, heading, accuracy } = pos.coords;
+                const spd = speed ? (speed * 3.6).toFixed(0) : '?';
+                const accTxt = accuracy ? `±${accuracy.toFixed(0)}m` : '?';
+
                 document.getElementById('status').innerHTML = 
-                    `📍 ${lat.toFixed(5)}, ${lon.toFixed(5)}<br>🚗 Vitesse : ${speed} km/h`;
+                    `📍 ${lat.toFixed(5)}, ${lon.toFixed(5)}<br>🚗 ${spd} km/h | Précision ${accTxt}`;
 
-                // Mise à jour position sur carte
+                // Mise à jour marker + cône direction (si heading)
                 if (userMarker) userMarker.setLatLng([lat, lon]);
-                else userMarker = L.marker([lat, lon], {icon: L.icon({iconUrl: 'https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png'})})
-                    .addTo(map).bindPopup('🚙 Ta position');
-                map.setView([lat, lon], 13);
+                else userMarker = L.marker([lat, lon], {icon: L.icon({iconUrl: 'https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png', iconSize: [38, 38], iconAnchor: [19, 38]})}).addTo(map);
+                
+                if (userCone) map.removeLayer(userCone);
+                if (heading >= 0) {
+                    userCone = L.circle([lat, lon], {radius: 30, color: '#2196f3', fillOpacity: 0.3, weight: 2})
+                        .addTo(map); // simple cercle pour simuler cône
+                }
+                map.panTo([lat, lon], {animate: true, duration: 0.8});
 
-                // Recherche radars proches
+                const now = Date.now();
+                if (now - lastCalcTime < 800) return; // throttle
+                lastCalcTime = now;
+
                 let closestDist = Infinity;
-                let closestId = null;
+                let closest = null;
+                let nearbyCount = 0;
 
-                Object.entries(radars).forEach(([id, radarObj]) => {
-                    const r = getRadar(radarObj);
+                Object.entries(radars).forEach(([id, obj]) => {
+                    const r = getRadar(obj);
                     if (!r.lat || !r.lon) return;
                     const dist = getDistance(lat, lon, r.lat, r.lon);
 
                     if (dist < closestDist) {
                         closestDist = dist;
-                        closestId = id;
-                        document.getElementById('nearest').style.display = 'block';
-                        document.getElementById('nearest').innerHTML = 
-                            `🔴 Plus proche : Radar ${id}<br>${r.type} – ${r.direction}<br>Distance : ${dist.toFixed(2)} km (limite ${r.vitesse} km/h)`;
+                        closest = {id, ...r};
                     }
+                    if (dist <= 2) nearbyCount++;
 
-                    // ALERTE À 500 MÈTRES
-                    if (dist <= 0.5 && !lastAlerted.has(id)) {
-                        const msg = `🚨 RADAR IMMINENT ! ${r.type} (${r.direction}) à ${(dist*1000).toFixed(0)} mètres (limite ${r.vitesse} km/h) ! Ralentis !`;
-                        alert(msg);
-                        speak(msg);
+                    // Alerte seulement si approche + cooldown
+                    if (dist <= 0.5 && !lastAlerted.has(id) && isApproaching(lat, lon, r.lat, r.lon, heading)) {
+                        const msg = `🚨 ${r.type.toUpperCase()} ! À ${Math.round(dist*1000)} m – Limite ${r.vitesse} !`;
+                        showToast(msg, 10000);
+                        speak(msg, r.type.toLowerCase().includes('mobile') ? 'mobile' : 'fixe');
                         lastAlerted.add(id);
-                        setTimeout(() => lastAlerted.delete(id), 120000); // 2 min cooldown
+                        setTimeout(() => lastAlerted.delete(id), 180000); // 3 min
+
+                        updateHistory(id, r.type, dist);
+                        if (dist < 0.1) radarsPassedToday++;
                     }
                 });
 
+                // Nearest + couleur vitesse
+                if (closest) {
+                    document.getElementById('nearest').style.display = 'block';
+                    let color = 'green';
+                    if (closestDist < 1) color = closest.vitesse < spd ? 'red' : 'orange';
+                    document.getElementById('nearest').innerHTML = 
+                        `Plus proche : ${closest.type} (${closest.direction})<br>Distance : ${closestDist.toFixed(2)} km – Limite ${closest.vitesse} km/h<br>Radars dans 2 km : ${nearbyCount}`;
+                    document.getElementById('nearest').style.background = color === 'red' ? '#d32f2f' : color === 'orange' ? '#ff9800' : '#4caf50';
+                }
+
             }, err => {
-                document.getElementById('status').textContent = '❌ Erreur GPS : ' + err.message;
-            }, { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 });
+                showToast('Erreur GPS : ' + err.message);
+            }, { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 });
         }
 
         function stopWatching() {
-            if (watchId !== null) {
-                navigator.geolocation.clearWatch(watchId);
-                watchId = null;
-                document.getElementById('status').textContent = 'Surveillance arrêtée.';
-            }
+            if (watchId) navigator.geolocation.clearWatch(watchId);
+            watchId = null;
+            if (testInterval) clearInterval(testInterval);
+            document.getElementById('status').textContent = 'Surveillance arrêtée.';
         }
 
-        function speak(text) {
-            if ('speechSynthesis' in window) {
-                const utt = new SpeechSynthesisUtterance(text.replace(/🚨|🔴/g, ''));
-                utt.lang = 'fr-FR';
-                utt.rate = 1.1;
-                utt.volume = 1;
-                speechSynthesis.speak(utt);
+        // Mode test simple (simule déplacement lent vers le centre France)
+        document.getElementById('testMode').onclick = () => {
+            isTestMode = !isTestMode;
+            if (isTestMode) {
+                showToast('Mode Test activé – simulation lente');
+                let simLat = 46.5, simLon = 2.5, step = 0.0005;
+                testInterval = setInterval(() => {
+                    simLat -= step; // vers sud par ex.
+                    const fakePos = {coords: {latitude: simLat, longitude: simLon, speed: 90/3.6, heading: 180, accuracy: 8}};
+                    // Simule le callback
+                    const event = new CustomEvent('positionupdate', {detail: fakePos});
+                    window.dispatchEvent(event); // tu peux écouter si tu veux refactor
+                    // Pour simplifier, appelle directement la logique avec fake
+                    // (ici on réutilise juste le code principal en fake)
+                }, 1500);
+            } else {
+                clearInterval(testInterval);
+                showToast('Mode Test désactivé');
             }
-        }
+        };
 
-        // Démarrage auto sur mobile
-        if (/Mobi|Android|iPhone/i.test(navigator.userAgent)) {
-            setTimeout(() => {
-                if (confirm('Lancer la démo GPS ?')) startWatching();
-            }, 1500);
+        // Thème toggle
+        document.getElementById('toggleTheme').onclick = () => {
+            theme = theme === 'dark' ? 'light' : 'dark';
+            document.body.className = theme;
+            localStorage.setItem('theme', theme);
+        };
+
+        // Load au démarrage
+        loadRadars();
+
+        // Auto-start sur mobile/Tesla browser ?
+        if (/Mobi|Android|Tesla/i.test(navigator.userAgent)) {
+            setTimeout(() => startWatching(), 2000);
         }
     </script>
 
