@@ -3,115 +3,59 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TESLΔPILOT — PRIDE EDITION v4.1</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <title>Test Carte Leaflet - Fix 2026</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5n/N0RDwR4=" crossorigin=""/>
     <style>
-        :root {
-            --pride-red:    #e40303;
-            --pride-orange: #ff8c00;
-            --pride-yellow: #ffed00;
-            --pride-green:  #008e00;
-            --pride-blue:   #004dff;
-            --pride-purple: #8f00ff;
-            --bg:           #0f001a;
-            --text:         #ffffff;
-            --panel:        rgba(30, 0, 60, 0.7);
-            --alert:        #ff69b4; /* hot pink */
+        html, body, #map-container, #map {
+            height: 100%;
+            margin: 0;
+            padding: 0;
         }
         body {
-            margin:0; padding:0;
-            font-family: system-ui, -apple-system, sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            height:100vh; overflow:hidden;
-            background: linear-gradient(135deg, 
-                var(--pride-red) 0%, var(--pride-orange) 20%, 
-                var(--pride-yellow) 40%, var(--pride-green) 60%, 
-                var(--pride-blue) 80%, var(--pride-purple) 100%);
-            background-size: 400% 400%;
-            animation: rainbowMove 20s ease infinite;
+            font-family: Arial, sans-serif;
+            background: #111;
+            color: #eee;
         }
-        @keyframes rainbowMove {
-            0%   {background-position:0% 50%}
-            50%  {background-position:100% 50%}
-            100% {background-position:0% 50%}
-        }
-        h1 {
-            font-size:2.6rem; letter-spacing:5px; text-transform:uppercase;
-            background: linear-gradient(90deg, white, #ff69b4, white);
-            -webkit-background-clip:text; -webkit-text-fill-color:transparent;
-            text-shadow:0 0 15px rgba(255,255,255,0.8);
-        }
-        #hud { position:absolute; inset:0; padding:20px; pointer-events:none; z-index:10;
-               display:flex; flex-direction:column; justify-content:space-between; }
-        #status, #nearest {
-            background:var(--panel); backdrop-filter:blur(10px);
-            border:2px solid #ff69b4; border-radius:12px; padding:12px;
-            box-shadow:0 0 25px #ff69b4;
-        }
-        #nearest { border-color:#00ffff; box-shadow:0 0 30px #00ffff; }
-        #map-container { flex:1; border:3px solid white; border-radius:16px; overflow:hidden;
-                         margin:15px 0; box-shadow:0 0 40px rgba(255,255,255,0.4); }
-        #map { height:100%; filter:brightness(1.15) contrast(1.25) saturate(1.4); }
-        button {
-            background:linear-gradient(45deg, #ff69b4, #00ffff, #ffff00);
-            border:none; color:black; padding:14px 30px; font-weight:bold;
-            border-radius:50px; cursor:pointer; box-shadow:0 0 15px white;
-            transition:all 0.4s;
-        }
-        button:hover { transform:scale(1.08); box-shadow:0 0 35px white; }
-        .controls { display:flex; justify-content:center; gap:25px; flex-wrap:wrap; pointer-events:auto; }
-        .toast {
-            position:fixed; bottom:120px; left:50%; transform:translateX(-50%);
-            background:rgba(0,0,0,0.8); border:4px solid #ff69b4; color:#ff69b4;
-            padding:18px 40px; border-radius:50px; font-size:1.7rem; font-weight:bold;
-            box-shadow:0 0 50px #ff69b4; z-index:999; animation:fadeInOut 5s forwards;
-        }
-        @keyframes fadeInOut { 0%{opacity:0; transform:translate(-50%,30px)} 10%{opacity:1} 90%{opacity:1} 100%{opacity:0; transform:translate(-50%,-30px)} }
+        h1 { text-align: center; margin: 10px 0; color: #0f0; }
+        #status { text-align: center; padding: 10px; background: rgba(0,0,0,0.6); }
     </style>
 </head>
 <body>
-    <div id="hud">
-        <div id="top-bar">
-            <h1>TESLΔPILOT PRIDE</h1>
-            <div style="font-size:1.1rem; opacity:0.9;">Love is never off the radar 💖🏳️‍🌈</div>
-        </div>
+    <h1>Test Carte Leaflet Simple (devrait marcher)</h1>
+    <div id="status">Chargement de la carte...</div>
 
-        <div id="status">CHARGEMENT... 🌈</div>
-        <div id="nearest" style="display:none;"></div>
-
-        <div id="map-container"><div id="map"></div></div>
-
-        <div class="controls">
-            <button id="start">▶ GO GO GO</button>
-            <button id="stop" style="background:linear-gradient(45deg,#ff1744,#d500f9)">■ STOP</button>
-            <button id="testMode">🧪 TEST MODE</button>
-        </div>
-
-        <div id="history"><strong>HISTORY :</strong><br>--- nothing yet 💅 ---</div>
+    <div id="map-container">
+        <div id="map"></div>
     </div>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <script>
-        // ... (le reste du script JavaScript reste identique à la version précédente, 
-        // juste change la tileLayer pour une plus fiable)
+        // Création de la carte
+        var map = L.map('map').setView([47.0, 3.0], 10);  // Centré sur Bourgogne / Chaulgnes
 
-        function initMap() {
-            map = L.map('map', {zoomControl:false, attributionControl:false}).setView([46.5, 2.5], 6);
-            
-            // Source plus fiable et sans pub (CartoDB Positron)
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-                attribution: '© OpenStreetMap & CARTO',
-                maxZoom: 19,
-                opacity: 0.7
-            }).addTo(map);
+        // Tuiles OSM officielles (source la plus fiable en 2026)
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            maxZoom: 19,
+            tileSize: 256,
+            zoomOffset: 0
+        }).addTo(map);
 
-            // ... (le reste du code d'ajout des radars reste le même)
-            
-            setTimeout(() => map.invalidateSize(), 500); // Délai un peu plus long
-        }
+        // Marqueur test (près de Chaulgnes)
+        L.marker([47.13, 3.13]).addTo(map)
+            .bindPopup("Ici près de Chaulgnes !")
+            .openPopup();
 
-        // Le reste du script (processPosition, loadRadars, events, etc.) reste identique
+        // Force le recalcul de la taille (très important !)
+        setTimeout(function() {
+            map.invalidateSize();
+            document.getElementById('status').textContent = "Carte chargée ! Zoome/déplace pour tester.";
+        }, 500);
+
+        // Redéclenchement sur resize de la fenêtre (au cas où)
+        window.addEventListener('resize', function() {
+            map.invalidateSize();
+        });
     </script>
 </body>
 </html>
