@@ -3,41 +3,65 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TESLΔPILOT — RADAR DETECTION v3.1</title>
+    <title>TESLΔPILOT — RADAR DETECTION v3.2 NEURAL</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         :root {
-            --bg: #0b0014;
+            --bg: #080014;
             --primary: #e040fb;
-            --secondary: #00ffff;
-            --electric-blue: #0088ff;
-            --alert: #ff0048;
-            --text: #d0bfff;
-            --panel: rgba(15, 5, 40, 0.55);
-            --grid: rgba(224, 64, 251, 0.08);
+            --secondary: #00f0ff;
+            --electric-blue: #00aaff;
+            --alert: #ff004d;
+            --text: #e0d0ff;
+            --panel: rgba(20,10,50,0.6);
+            --grid: rgba(224,64,251,0.07);
         }
         body {
-            margin: 0; padding: 0;
-            font-family: 'Orbitron', 'Courier New', monospace;
-            background: var(--bg);
-            color: var(--text);
-            height: 100vh;
-            overflow: hidden;
-            position: relative;
+            margin:0; font-family:'Orbitron','Courier New',monospace;
+            background:var(--bg); color:var(--text);
+            height:100vh; overflow:hidden; position:relative;
         }
-        /* (style identique à la v3.0 précédente – grid, scanlines, particules, glows, etc.) */
-        body::before { /* grid animé */ }
-        body::after { /* scanlines */ }
-        .particles { /* particules */ }
-        .particle { /* ... */ }
-        h1 { /* glow violet-cyan */ }
-        #hud { /* ... */ }
-        #status, #nearest { /* ... */ }
-        #nearest { animation: alertPulse 1.5s infinite alternate; }
-        #map-container { /* border glow */ }
-        button { /* neon buttons */ }
-        .toast { /* gros alert glitch */ }
-        .user-marker { color: var(--electric-blue) !important; font-size: 36px; text-shadow: 0 0 15px var(--electric-blue), 0 0 30px var(--electric-blue); animation: userPulse 2s infinite alternate; }
+        body::before {
+            content:''; position:absolute; inset:0;
+            background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,240,255,0.04) 3px,rgba(0,240,255,0.04) 6px),
+                       repeating-linear-gradient(90deg,transparent,transparent 3px,rgba(224,64,251,0.04) 3px,rgba(224,64,251,0.04) 6px);
+            background-size:40px 40px; animation:gridMove 30s linear infinite;
+            pointer-events:none; z-index:1; opacity:0.5;
+        }
+        @keyframes gridMove { 0%{background-position:0 0} 100%{background-position:40px 40px} }
+        .particles{position:absolute;inset:0;pointer-events:none;z-index:2;overflow:hidden}
+        .particle{position:absolute;width:3px;height:3px;background:var(--primary);box-shadow:0 0 12px var(--primary);animation:float 18s linear infinite}
+        @keyframes float{0%{transform:translateY(100vh) translateX(-50vw);opacity:0}10%{opacity:.8}90%{opacity:.8}100%{transform:translateY(-20vh) translateX(80vw);opacity:0}}
+        h1{margin:0;font-size:3rem;font-weight:900;letter-spacing:10px;text-transform:uppercase;
+           background:linear-gradient(90deg,var(--primary),var(--secondary));-webkit-background-clip:text;-webkit-text-fill-color:transparent;
+           text-shadow:0 0 25px var(--primary); animation:glow 4s ease-in-out infinite alternate}
+        @keyframes glow{from{text-shadow:0 0 25px var(--primary)}to{text-shadow:0 0 50px var(--primary),0 0 80px var(--secondary)}}
+        .subtitle{font-size:1.1rem;opacity:0.75;letter-spacing:4px;color:var(--secondary)}
+        #hud{position:absolute;inset:0;padding:20px;pointer-events:none;z-index:10;display:flex;flex-direction:column;justify-content:space-between}
+        #top-bar{display:flex;justify-content:space-between;align-items:flex-start}
+        #status,#nearest{background:var(--panel);backdrop-filter:blur(12px);border:1px solid var(--primary);border-radius:10px;padding:14px 20px;
+                        box-shadow:0 0 25px rgba(224,64,251,0.45);font-size:1rem;letter-spacing:1px}
+        #nearest{border-color:var(--alert);box-shadow:0 0 35px var(--alert);animation:alertPulse 1.8s infinite alternate}
+        @keyframes alertPulse{from{box-shadow:0 0 25px var(--alert)}to{box-shadow:0 0 60px var(--alert),0 0 100px rgba(255,0,77,0.5)}}
+        #map-container{flex:1;position:relative;border:2px solid var(--primary);border-radius:12px;overflow:hidden;margin:15px 0;
+                       box-shadow:0 0 50px rgba(224,64,251,0.35)}
+        #map{height:100%;filter:brightness(0.75) contrast(1.35) saturate(1.5)}
+        .controls{display:flex;justify-content:center;gap:20px;flex-wrap:wrap;pointer-events:auto}
+        button{background:transparent;border:2px solid var(--primary);color:var(--primary);padding:12px 26px;font-size:1.1rem;font-weight:bold;
+               letter-spacing:3px;text-transform:uppercase;border-radius:8px;cursor:pointer;transition:all .4s;
+               box-shadow:0 0 18px var(--primary)}
+        button:hover{background:var(--primary);color:#000;box-shadow:0 0 45px var(--primary);transform:translateY(-4px)}
+        button.danger{border-color:var(--alert);color:var(--alert);box-shadow:0 0 18px var(--alert)}
+        button.danger:hover{background:var(--alert);box-shadow:0 0 60px var(--alert)}
+        #history{background:var(--panel);border:1px solid var(--secondary);padding:14px;border-radius:10px;max-height:160px;overflow-y:auto;font-size:0.92rem}
+        .toast{position:fixed;bottom:140px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.85);border:3px solid var(--alert);color:var(--alert);
+               padding:20px 50px;border-radius:12px;font-size:1.8rem;font-weight:bold;box-shadow:0 0 60px var(--alert);z-index:999;
+               animation:toastIn .7s,toastGlow 2.5s infinite alternate,fadeOut 7s 1.5s forwards;letter-spacing:5px}
+        @keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(60px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+        @keyframes toastGlow{from{box-shadow:0 0 40px var(--alert)}to{box-shadow:0 0 100px var(--alert)}}
+        @keyframes fadeOut{to{opacity:0;transform:translateX(-50%) translateY(-80px)}}
+        .user-marker{color:var(--electric-blue)!important;font-size:42px;text-shadow:0 0 20px var(--electric-blue),0 0 40px var(--electric-blue);animation:userPulse 2.2s infinite alternate}
+        @keyframes userPulse{from{text-shadow:0 0 20px var(--electric-blue)}to{text-shadow:0 0 45px var(--electric-blue),0 0 70px var(--electric-blue)}}
     </style>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
 </head>
@@ -48,20 +72,18 @@
         <div id="top-bar">
             <div>
                 <h1>TESLΔPILOT</h1>
-                <div class="subtitle">v3.1 — NEURAL RADAR MATRIX 2026</div>
+                <div class="subtitle">v3.2 — NEURAL RADAR MATRIX 2026</div>
             </div>
         </div>
 
-        <div id="status">INITIALISATION NEURALE... CONNEXION GPS</div>
-        <div id="nearest" style="display:none;"></div>
+        <div id="status">SYSTÈME EN INITIALISATION... RECHERCHE SIGNAL GPS</div>
+        <div id="nearest" style="display:none"></div>
 
-        <div id="map-container">
-            <div id="map"></div>
-        </div>
+        <div id="map-container"><div id="map"></div></div>
 
         <div class="controls">
-            <button id="start">▶ ACTIVATION</button>
-            <button id="stop" class="danger">■ ARRÊT</button>
+            <button id="start">▶ LANCER SCAN</button>
+            <button id="stop" class="danger">■ STOP</button>
             <button id="testMode">🧪 SIMULATION</button>
         </div>
 
@@ -70,191 +92,128 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // Particules (comme avant)
-        const particlesContainer = document.getElementById('particles');
-        for (let i = 0; i < 40; i++) {
-            const p = document.createElement('div');
-            p.className = 'particle';
-            p.style.left = Math.random() * 100 + 'vw';
-            p.style.animationDelay = Math.random() * 15 + 's';
-            p.style.animationDuration = (10 + Math.random() * 20) + 's';
-            particlesContainer.appendChild(p);
+        // Particules
+        for(let i=0;i<50;i++){const p=document.createElement('div');p.className='particle';p.style.left=Math.random()*100+'vw';p.style.animationDelay=Math.random()*18+'s';p.style.animationDuration=(12+Math.random()*20)+'s';document.getElementById('particles').appendChild(p)}
+
+        let map,userMarker,watchId=null,lastAlerted=new Set(),history=[],testInterval=null,radars={};
+
+        const $ = id => document.getElementById(id);
+
+        function getRadar(o){
+            return{
+                type:o.type||'INCONNU',
+                vitesse:o.vitesse||o.VMA||'??',
+                lat:parseFloat(o.lat||o.Latitude||o.y),
+                lon:parseFloat(o.lon||o.Longitude||o.x),
+                model:o.model||'MESTA/FALCO/??',
+                direction:o.direction||'??'
+            }
         }
 
-        let map, userMarker;
-        let radars = {};
-        let watchId = null;
-        let lastAlerted = new Set();
-        let history = [];
-        let testInterval = null;
-
-        function getRadar(obj) {
-            return {
-                id: obj.id || '??',
-                type: obj.type || (obj.discriminant ? 'Discriminant' : 'Fixe classique'),
-                vitesse: obj.vitesse || obj.VMA || '??',
-                direction: obj.direction || '??',
-                lat: parseFloat(obj.lat || obj.Latitude || obj.y),
-                lon: parseFloat(obj.lon || obj.Longitude || obj.x),
-                model: obj.model || 'MESTA/FALCO/??',
-                troncon: obj.troncon || false  // pour futur extension
-            };
+        function getDistance(lat1,lon1,lat2,lon2){
+            const R=6371,dLat=(lat2-lat1)*Math.PI/180,dLon=(lon2-lon1)*Math.PI/180;
+            return R*2*Math.atan2(Math.sqrt(Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2),Math.sqrt(1-Math.sin(dLat/2)**2-Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2))
         }
 
-        function getDistance(lat1, lon1, lat2, lon2) {
-            const R = 6371;
-            const dLat = (lat2 - lat1) * Math.PI / 180;
-            const dLon = (lon2 - lon1) * Math.PI / 180;
-            const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
-            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        function getZoom(speed){
+            if(speed<30)return 17;
+            if(speed<70)return 16;
+            if(speed<110)return 15;
+            return 14
         }
 
-        function getZoomForSpeed(speed) {
-            if (speed < 30) return 17;
-            if (speed < 70) return 16;
-            if (speed < 110) return 15;
-            return 14;
+        function showToast(msg){
+            const t=document.createElement('div');t.className='toast';t.textContent=msg;document.body.appendChild(t);
+            setTimeout(()=>t.remove(),8000)
         }
 
-        function showToast(msg) {
-            const t = document.createElement('div');
-            t.className = 'toast';
-            t.textContent = msg;
-            document.body.appendChild(t);
-            setTimeout(() => t.remove(), 7000);
-        }
-
-        function updateHistory(id, type, dist, extra='') {
+        function updateHistory(id,type,dist,extra=''){
             history.unshift(`${new Date().toLocaleTimeString()} → ${type} ${id} @ ${dist.toFixed(2)}km ${extra}`);
-            if (history.length > 8) history.pop();
-            document.getElementById('history').innerHTML = '<strong>LOG NEURAL :</strong><br>' + (history.length ? history.join('<br>') : '--- en attente ---');
+            if(history.length>10)history.pop();
+            $('history').innerHTML='<strong>LOG NEURAL :</strong><br>'+(history.length?history.join('<br>'):'--- en attente ---')
         }
 
-        function processPosition(pos) {
-            const { latitude: lat, longitude: lon, speed: speedMs, accuracy } = pos.coords;
-            const spd = speedMs ? Math.round(speedMs * 3.6) : '??';
-            document.getElementById('status').textContent = `POS: ${lat.toFixed(5)}° ${lon.toFixed(5)}° • V: ${spd} km/h • PRÉC: ±${Math.round(accuracy||0)}m`;
+        function processPosition(pos){
+            const {latitude:lat,longitude:lon,speed:speedMs,accuracy}=pos.coords;
+            const spd=speedMs?Math.round(speedMs*3.6):'??';
+            $('status').textContent=`POS: ${lat.toFixed(5)}, ${lon.toFixed(5)} • ${spd} km/h • ±${Math.round(accuracy||0)}m`;
 
-            // Zoom auto selon vitesse
-            const targetZoom = getZoomForSpeed(spd === '??' ? 50 : spd);
-            map.setView([lat, lon], targetZoom, {animate: true});
+            const zoom=getZoom(spd==='??'?50:spd);
+            map.setView([lat,lon],zoom,{animate:true});
 
-            if (!userMarker) {
-                userMarker = L.marker([lat, lon], {
-                    icon: L.divIcon({
-                        className: 'user-marker',
-                        html: '▼',
-                        iconSize: [40, 40],
-                        iconAnchor: [20, 40]
-                    })
-                }).addTo(map);
-            } else {
-                userMarker.setLatLng([lat, lon]);
-            }
+            if(!userMarker){
+                userMarker=L.marker([lat,lon],{icon:L.divIcon({className:'user-marker',html:'▼',iconSize:[48,48],iconAnchor:[24,48]})}).addTo(map)
+            }else userMarker.setLatLng([lat,lon]);
 
-            let nearest = null, minDist = Infinity;
-            Object.entries(radars).forEach(([id, obj]) => {
-                const r = getRadar(obj);
-                if (!r.lat) return;
-                const dist = getDistance(lat, lon, r.lat, r.lon);
-                if (dist < minDist) { minDist = dist; nearest = {id, ...r, dist}; }
+            let nearest=null,minDist=Infinity;
+            Object.entries(radars).forEach(([id,obj])=>{
+                const r=getRadar(obj);
+                if(!r.lat)return;
+                const dist=getDistance(lat,lon,r.lat,r.lon);
+                if(dist<minDist){minDist=dist;nearest={id,...r,dist}}
 
-                if (dist < 0.8 && !lastAlerted.has(id)) {  // alerte plus tôt
-                    let marge = (r.type.includes('Mobile') || r.type.includes('Voiture')) ? 10 : 5;
-                    let retenue = r.vitesse ? parseInt(r.vitesse) + marge : '??';
-                    let extra = r.type.includes('Tronçon') ? ' (vitesse moyenne)' : ` (retenue ~${retenue} km/h)`;
-                    const msg = `ALERTE ! ${r.type} → ${Math.round(dist*1000)}m • LIM ${r.vitesse} ${extra}`;
+                if(dist<1&&!lastAlerted.has(id)){
+                    const marge=r.type.includes('Mobile')||r.type.includes('Voiture')?10:5;
+                    const retenue=r.vitesse?parseInt(r.vitesse)+marge:'??';
+                    let extra=r.type.includes('Tronçon')?' (vitesse moyenne sur segment)':' (retenue ≈'+retenue+' km/h)';
+                    const msg=`!!! ${r.type.toUpperCase()} !!!  ${Math.round(dist*1000)}m  LIM ${r.vitesse} ${extra}`;
                     showToast(msg);
-                    lastAlerted.add(id);
-                    setTimeout(() => lastAlerted.delete(id), 120000);
-                    updateHistory(id, r.type, dist, extra);
+                    lastAlerted.add(id);setTimeout(()=>lastAlerted.delete(id),120000);
+                    updateHistory(id,r.type,dist,extra)
                 }
             });
 
-            if (nearest) {
-                const el = document.getElementById('nearest');
-                el.style.display = 'block';
-                let tronconSuspect = nearest.dist < 5 && nearest.type.includes('Fixe') ? ' ? possible tronçon proche' : '';
-                el.innerHTML = `MENACE PROCHE → ${nearest.type} • ${nearest.dist.toFixed(2)} km • LIM ${nearest.vitesse} km/h${tronconSuspect}<br>Modèle: ${nearest.model}`;
-            } else {
-                document.getElementById('nearest').style.display = 'none';
-            }
+            if(nearest){
+                const el=$('nearest');
+                el.style.display='block';
+                const susp=nearest.dist<6&&nearest.type.includes('Fixe')?' ? possible tronçon ou doublette proche':'';
+                el.innerHTML=`MENACE PROCHE → ${nearest.type}<br>Distance: ${nearest.dist.toFixed(2)} km • LIM ${nearest.vitesse} km/h${susp}<br>Modèle: ${nearest.model} • Dir: ${nearest.direction}`
+            }else $('nearest').style.display='none'
         }
 
-        function loadRadars() {
-            fetch('radars.json')
-                .then(r => r.json())
-                .then(data => {
-                    radars = data;
-                    const count = Object.keys(radars).length;
-                    document.getElementById('status').textContent = `MATRICE 2026 CHARGÉE — ${count} ÉMETTEURS (fixes, mobiles, tronçons, tourelles...)`;
-                    initMap();
-                })
-                .catch(() => {
-                    document.getElementById('status').textContent = 'ERREUR CHARGEMENT radars.json — Vérifie le fichier !';
-                });
+        function loadRadars(){
+            fetch('radars.json').then(r=>r.json()).then(data=>{
+                radars=data;
+                $('status').textContent=`MATRICE CHARGÉE — ${Object.keys(radars).length} ÉMETTEURS DÉTECTÉS`;
+                initMap()
+            }).catch(()=>$('status').textContent='ERREUR CHARGEMENT radars.json')
         }
 
-        function initMap() {
-            map = L.map('map', {zoomControl: false, attributionControl: false}).setView([46.5, 2.5], 6);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {opacity: 0.3}).addTo(map);
+        function initMap(){
+            map=L.map('map',{zoomControl:false,attributionControl:false}).setView([46.5,2.5],6);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{opacity:0.35}).addTo(map);
 
-            Object.entries(radars).forEach(([id, obj]) => {
-                const r = getRadar(obj);
-                if (r.lat) {
-                    const color = r.type.includes('Tronçon') ? '#ffaa00' : (r.type.includes('Mobile') ? '#00ff9d' : '#ff0048');
-                    L.circleMarker([r.lat, r.lon], {
-                        radius: r.type.includes('Tronçon') ? 14 : 10,
-                        color: color,
-                        weight: 2,
-                        fillOpacity: 0.7
-                    })
-                    .addTo(map)
-                    .bindPopup(`
-                        <b>ID:</b> ${id}<br>
-                        <b>Type:</b> ${r.type}<br>
-                        <b>Limite:</b> ${r.vitesse} km/h<br>
-                        <b>Modèle:</b> ${r.model}<br>
-                        <b>Direction:</b> ${r.direction}<br>
-                        <small>Marge typique: ${r.type.includes('Mobile') ? '~10' : '~5'} km/h</small>
-                    `);
+            Object.entries(radars).forEach(([id,obj])=>{
+                const r=getRadar(obj);
+                if(r.lat){
+                    const color=r.type.includes('Tronçon')?'#ffcc00':(r.type.includes('Mobile')?'#00ffaa':'#ff004d');
+                    L.circleMarker([r.lat,r.lon],{radius:r.type.includes('Tronçon')?16:10,color:color,weight:2,fillOpacity:0.65})
+                    .addTo(map).bindPopup(`<b>${id}</b><br>Type: ${r.type}<br>Limite: ${r.vitesse} km/h<br>Modèle: ${r.model}<br>Direction: ${r.direction}<br>Marge typique: ${r.type.includes('Mobile')?'±10':'±5'} km/h`)
                 }
             });
-
-            setTimeout(() => map.invalidateSize(), 300);
+            setTimeout(()=>map.invalidateSize(),400)
         }
 
-        document.getElementById('start').onclick = () => {
-            if (watchId) return;
-            watchId = navigator.geolocation.watchPosition(processPosition, e => {
-                document.getElementById('status').textContent = 'ERREUR GPS: ' + e.message;
-            }, {enableHighAccuracy: true, maximumAge: 0, timeout: 8000});
-            showToast('NEURAL SCAN ACTIVÉ — ZOOM AUTO ENGAGÉ');
+        $('start').onclick=()=>{
+            if(watchId)return;
+            watchId=navigator.geolocation.watchPosition(processPosition,e=>$('status').textContent='GPS ERROR: '+e.message,{enableHighAccuracy:true,maximumAge:0,timeout:8000});
+            showToast('SCAN GPS NEURAL ACTIVÉ')
         };
 
-        document.getElementById('stop').onclick = () => {
-            if (watchId) navigator.geolocation.clearWatch(watchId);
-            watchId = null;
-            clearInterval(testInterval);
-            showToast('SYSTÈME EN VEILLE');
+        $('stop').onclick=()=>{
+            if(watchId)navigator.geolocation.clearWatch(watchId);
+            watchId=null;clearInterval(testInterval);
+            showToast('SYSTÈME EN VEILLE')
         };
 
-        document.getElementById('testMode').onclick = () => {
-            if (testInterval) {
-                clearInterval(testInterval);
-                testInterval = null;
-                showToast('SIMULATION STOPPÉE');
-                return;
-            }
-            showToast('MODE SIMULATION — Vitesse variable');
-            let lat = 46.6;
-            let step = -0.0015;
-            let simSpeed = 50;
-            testInterval = setInterval(() => {
-                lat += step;
-                simSpeed = 40 + Math.random() * 100; // varie entre ~40 et 140 km/h
-                processPosition({coords: {latitude: lat, longitude: 3.0, speed: simSpeed / 3.6, accuracy: 4}});
-            }, 1000);
+        $('testMode').onclick=()=>{
+            if(testInterval){clearInterval(testInterval);testInterval=null;showToast('SIMULATION TERMINÉE');return}
+            showToast('MODE SIMULATION ACTIVÉ');
+            let lat=46.6,step=-0.0015,simSpeed=45;
+            testInterval=setInterval(()=>{
+                lat+=step;simSpeed=30+Math.random()*120;
+                processPosition({coords:{latitude:lat,longitude:3.0,speed:simSpeed/3.6,accuracy:5}})
+            },900)
         };
 
         loadRadars();
