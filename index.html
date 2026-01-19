@@ -2,279 +2,490 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>TeslaSentinel | Détection Avancée</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TeslaPilot - Détecteur Radars</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        :root {
-            --tesla-red: #e53e3e;
-            --tesla-blue: #3e89e5;
-            --tesla-dark: #1a1a2e;
-            --tesla-darker: #16213e;
-            --tesla-glow: 0 0 15px rgba(62, 137, 229, 0.7);
-            --tesla-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-        }
-
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', sans-serif;
         }
 
         body {
-            background: var(--tesla-darker);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
             color: white;
-            height: 100vh;
-            overflow: hidden;
-            touch-action: manipulation;
-        }
-
-        .container {
+            min-height: 100vh;
             display: flex;
             flex-direction: column;
-            height: 100vh;
-            padding: 15px;
-            gap: 15px;
         }
 
         .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 10px 15px;
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 15px;
-            box-shadow: var(--tesla-shadow);
-        }
-
-        .logo {
-            font-size: 24px;
-            font-weight: bold;
-            color: var(--tesla-blue);
-            text-shadow: var(--tesla-glow);
-        }
-
-        .status-bar {
+            padding: 1rem;
             background: rgba(0, 0, 0, 0.3);
-            padding: 12px 15px;
-            border-radius: 12px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            box-shadow: var(--tesla-shadow);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
 
-        .status-text {
-            font-size: 14px;
-            color: #a0a0a0;
-        }
-
-        .speed-display {
-            font-size: 32px;
-            font-weight: bold;
-            color: var(--tesla-blue);
-            text-shadow: var(--tesla-glow);
-        }
-
-        .map-container {
-            flex: 1;
-            position: relative;
-            border-radius: 15px;
-            overflow: hidden;
-            box-shadow: var(--tesla-shadow);
-            background: #000;
-        }
-
-        #map {
-            height: 100%;
-            width: 100%;
-            z-index: 1;
-        }
-
-        .radar-alert {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(229, 62, 62, 0.9);
-            color: white;
-            padding: 15px 25px;
-            border-radius: 50px;
-            font-weight: bold;
-            display: none;
-            z-index: 1000;
-            box-shadow: 0 0 20px rgba(229, 62, 62, 0.7);
-            animation: pulse 1.5s infinite;
-        }
-
-        @keyframes pulse {
-            0% { transform: translateX(-50%) scale(1); }
-            50% { transform: translateX(-50%) scale(1.05); }
-            100% { transform: translateX(-50%) scale(1); }
-        }
-
-        .controls {
-            display: flex;
-            justify-content: center;
-            gap: 20px;
-            padding: 15px;
-        }
-
-        .control-btn {
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            border: none;
-            background: var(--tesla-blue);
-            color: white;
-            font-size: 24px;
-            cursor: pointer;
-            box-shadow: var(--tesla-shadow);
-            transition: all 0.2s;
+        .header h1 {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
             display: flex;
             align-items: center;
-            justify-content: center;
-        }
-
-        .control-btn:active {
-            transform: scale(0.95);
-            box-shadow: 0 0 10px rgba(62, 137, 229, 0.5);
-        }
-
-        .control-btn.stop {
-            background: var(--tesla-red);
-        }
-
-        .radar-list {
-            position: absolute;
-            right: 15px;
-            top: 15px;
-            background: rgba(0, 0, 0, 0.7);
-            border-radius: 12px;
-            padding: 10px;
-            max-height: 70vh;
-            overflow-y: auto;
-            width: 280px;
-            z-index: 100;
-            display: none;
-        }
-
-        .radar-list.visible {
-            display: block;
-        }
-
-        .radar-item {
-            background: rgba(0, 0, 0, 0.3);
-            margin: 5px 0;
-            padding: 10px;
-            border-radius: 8px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .radar-item.highlight {
-            background: rgba(229, 62, 62, 0.5);
-            animation: blink 1s infinite;
-        }
-
-        @keyframes blink {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
-        }
-
-        .radar-toggle {
-            position: absolute;
-            right: 15px;
-            top: 15px;
-            width: 40px;
-            height: 40px;
-            background: var(--tesla-blue);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            z-index: 101;
-            box-shadow: var(--tesla-shadow);
-        }
-
-        .settings-panel {
-            position: absolute;
-            left: 15px;
-            top: 15px;
-            background: rgba(0, 0, 0, 0.7);
-            border-radius: 12px;
-            padding: 15px;
-            width: 250px;
-            z-index: 101;
-            display: none;
-        }
-
-        .settings-panel.visible {
-            display: block;
-        }
-
-        .setting-item {
-            margin: 10px 0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .toggle-switch {
-            position: relative;
-            width: 50px;
-            height: 24px;
-            background: #555;
-            border-radius: 12px;
-            cursor: pointer;
-        }
-
-        .toggle-switch.active {
-            background: var(--tesla-blue);
-        }
-
-        .toggle-switch::after {
-            content: '';
-            position: absolute;
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            background: white;
-            top: 2px;
-            left: 2px;
-            transition: transform 0.2s;
-        }
-
-        .toggle-switch.active::after {
-            transform: translateX(26px);
+            gap: 0.5rem;
         }
 
         .warning {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: rgba(255, 193, 7, 0.9);
-            color: black;
-            padding: 10px;
-            text-align: center;
-            font-size: 12px;
-            z-index: 1000;
+            font-size: 0.75rem;
+            color: #ffd700;
+            padding: 0.5rem;
+            background: rgba(255, 215, 0, 0.1);
+            border-radius: 4px;
+            border-left: 3px solid #ffd700;
         }
 
-        @media (max-width: 768px) {
-            .radar-list {
-                width: 250px;
-            }
+        .controls {
+            padding: 1rem;
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.2);
+        }
 
-            .settings-panel {
-                width: 220px;
-            }
+        .btn {
+            padding: 0.75rem 1.5rem;
+            font-size: 1rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-start {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-start:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-stop {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+
+        .btn-stop:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(245, 87, 108, 0.4);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .status-panel {
+            padding: 1rem;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+        }
+
+        .status-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 1rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .status-card h3 {
+            font-size: 0.875rem;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .status-card .value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #fff;
+        }
+
+        .alert-box {
+            display: none;
+            margin: 1rem;
+            padding: 1rem;
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(255, 107, 107, 0.4);
+            animation: pulse 2s infinite;
+        }
+
+        .alert-box.active {
+            display: block;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.8; }
+        }
+
+        .alert-box h2 {
+            font-size: 1.25rem;
+            margin-bottom: 0.5rem;
+        }
+
+        #map {
+            flex: 1;
+            min-height: 400px;
+            position: relative;
+        }
+
+        .radar-marker {
+            background: #ff4444;
+            border: 3px solid white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 2rem;
+            border-radius: 12px;
+            display: none;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
     </style>
 </head>
 <body>
+    <div class="header">
+        <h1>🚨 TeslaPilot - Détecteur Radars</h1>
+        <div class="warning">
+            ⚠️ Usage démonstration uniquement – Positions exactes des radars (interdit sur route ouverte en France)
+        </div>
+    </div>
+
+    <div class="controls">
+        <button class="btn btn-start" id="startBtn" onclick="app.start()">
+            ▶️ Démarrer GPS
+        </button>
+        <button class="btn btn-stop" id="stopBtn" onclick="app.stop()" disabled>
+            ⏹️ Arrêter
+        </button>
+    </div>
+
+    <div class="status-panel">
+        <div class="status-card">
+            <h3>📡 Radars chargés</h3>
+            <div class="value" id="radarCount">0</div>
+        </div>
+        <div class="status-card">
+            <h3>📍 Position GPS</h3>
+            <div class="value" id="gpsPosition">En attente...</div>
+        </div>
+        <div class="status-card">
+            <h3>🚗 Vitesse</h3>
+            <div class="value" id="speedDisplay">0 km/h</div>
+        </div>
+        <div class="status-card">
+            <h3>🎯 Radar proche</h3>
+            <div class="value" id="nearestRadar">Aucun</div>
+        </div>
+    </div>
+
+    <div class="alert-box" id="alertBox">
+        <h2>🚨 ATTENTION RADAR!</h2>
+        <p id="alertText"></p>
+    </div>
+
+    <div id="map"></div>
+
+    <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <p style="margin-top: 1rem;">Chargement des radars...</p>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const app = {
+            radars: {},
+            map: null,
+            userMarker: null,
+            radarMarkers: [],
+            watchId: null,
+            alertedRadars: new Set(),
+            isRunning: false,
+
+            // Initialisation
+            async init() {
+                this.showLoading(true);
+                await this.loadRadars();
+                this.initMap();
+                this.renderRadars();
+                this.showLoading(false);
+                this.checkMobileAutoStart();
+            },
+
+            // Chargement des radars
+            async loadRadars() {
+                try {
+                    const response = await fetch('radars.json');
+                    if (!response.ok) throw new Error('Erreur chargement radars.json');
+                    this.radars = await response.json();
+                    const count = Object.keys(this.radars).length;
+                    document.getElementById('radarCount').textContent = count;
+                } catch (error) {
+                    console.error('Erreur:', error);
+                    alert('❌ Impossible de charger radars.json. Vérifiez que le fichier existe.');
+                }
+            },
+
+            // Initialisation carte
+            initMap() {
+                this.map = L.map('map').setView([46.2276, 2.2137], 6);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap',
+                    maxZoom: 19
+                }).addTo(this.map);
+            },
+
+            // Afficher les radars sur la carte
+            renderRadars() {
+                Object.entries(this.radars).forEach(([id, radar]) => {
+                    const r = this.normalizeRadar(radar);
+                    if (!r.lat || !r.lon) return;
+
+                    const marker = L.circleMarker([r.lat, r.lon], {
+                        radius: 8,
+                        fillColor: '#ff4444',
+                        color: '#fff',
+                        weight: 2,
+                        fillOpacity: 0.8
+                    }).addTo(this.map);
+
+                    marker.bindPopup(`
+                        <strong>Radar ${id}</strong><br>
+                        ${r.type}<br>
+                        ${r.direction}<br>
+                        Limite: ${r.vitesse} km/h
+                    `);
+
+                    this.radarMarkers.push(marker);
+                });
+            },
+
+            // Normaliser les données radar
+            normalizeRadar(radar) {
+                return {
+                    type: radar.type || radar["Type de radar"] || 'Inconnu',
+                    vitesse: radar.vitesse || radar.VMA || '50',
+                    direction: radar.direction || radar["Direction"] || 'Double sens',
+                    lat: parseFloat(radar.lat || radar.Latitude),
+                    lon: parseFloat(radar.lon || radar.Longitude)
+                };
+            },
+
+            // Démarrer surveillance GPS
+            start() {
+                if (!navigator.geolocation) {
+                    alert('GPS non supporté par votre navigateur');
+                    return;
+                }
+
+                this.isRunning = true;
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('stopBtn').disabled = false;
+
+                this.watchId = navigator.geolocation.watchPosition(
+                    pos => this.onPositionUpdate(pos),
+                    err => this.onPositionError(err),
+                    { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
+                );
+            },
+
+            // Arrêter surveillance
+            stop() {
+                if (this.watchId !== null) {
+                    navigator.geolocation.clearWatch(this.watchId);
+                    this.watchId = null;
+                    this.isRunning = false;
+                    document.getElementById('startBtn').disabled = false;
+                    document.getElementById('stopBtn').disabled = true;
+                    document.getElementById('alertBox').classList.remove('active');
+                }
+            },
+
+            // Mise à jour position
+            onPositionUpdate(pos) {
+                const lat = pos.coords.latitude;
+                const lon = pos.coords.longitude;
+                const speed = pos.coords.speed ? (pos.coords.speed * 3.6).toFixed(0) : 0;
+
+                // Mise à jour affichage
+                document.getElementById('gpsPosition').textContent = 
+                    `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+                document.getElementById('speedDisplay').textContent = `${speed} km/h`;
+
+                // Mise à jour marqueur utilisateur
+                this.updateUserMarker(lat, lon);
+
+                // Recherche radars proches
+                this.checkNearbyRadars(lat, lon, speed);
+            },
+
+            // Erreur GPS
+            onPositionError(err) {
+                console.error('Erreur GPS:', err);
+                alert(`❌ Erreur GPS: ${err.message}`);
+            },
+
+            // Mise à jour marqueur utilisateur
+            updateUserMarker(lat, lon) {
+                if (this.userMarker) {
+                    this.userMarker.setLatLng([lat, lon]);
+                } else {
+                    this.userMarker = L.marker([lat, lon], {
+                        icon: L.icon({
+                            iconUrl: 'https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png',
+                            iconSize: [25, 41],
+                            iconAnchor: [12, 41]
+                        })
+                    }).addTo(this.map).bindPopup('🚙 Votre position');
+                }
+                this.map.setView([lat, lon], 13);
+            },
+
+            // Vérifier radars proches
+            checkNearbyRadars(lat, lon, speed) {
+                let closest = { dist: Infinity, id: null, radar: null };
+
+                Object.entries(this.radars).forEach(([id, radarData]) => {
+                    const radar = this.normalizeRadar(radarData);
+                    if (!radar.lat || !radar.lon) return;
+
+                    const dist = this.getDistance(lat, lon, radar.lat, radar.lon);
+
+                    if (dist < closest.dist) {
+                        closest = { dist, id, radar };
+                    }
+
+                    // Alerte à 500m
+                    if (dist <= 0.5 && !this.alertedRadars.has(id)) {
+                        this.triggerAlert(id, radar, dist);
+                    }
+                });
+
+                // Afficher radar le plus proche
+                if (closest.id) {
+                    document.getElementById('nearestRadar').textContent = 
+                        `${closest.dist.toFixed(2)} km`;
+                } else {
+                    document.getElementById('nearestRadar').textContent = 'Aucun';
+                }
+            },
+
+            // Déclencher alerte
+            triggerAlert(id, radar, dist) {
+                const distMeters = (dist * 1000).toFixed(0);
+                const message = `RADAR ${radar.type} à ${distMeters}m ! Limite ${radar.vitesse} km/h - ${radar.direction}`;
+                
+                // Affichage visuel
+                const alertBox = document.getElementById('alertBox');
+                document.getElementById('alertText').textContent = message;
+                alertBox.classList.add('active');
+
+                // Synthèse vocale
+                this.speak(`Attention ! Radar à ${distMeters} mètres. Limite ${radar.vitesse} kilomètres heure.`);
+
+                // Marquer comme alerté
+                this.alertedRadars.add(id);
+                setTimeout(() => {
+                    this.alertedRadars.delete(id);
+                    alertBox.classList.remove('active');
+                }, 120000); // 2 min
+            },
+
+            // Synthèse vocale
+            speak(text) {
+                if ('speechSynthesis' in window) {
+                    const utterance = new SpeechSynthesisUtterance(text);
+                    utterance.lang = 'fr-FR';
+                    utterance.rate = 1.1;
+                    utterance.volume = 1;
+                    speechSynthesis.speak(utterance);
+                }
+            },
+
+            // Calcul distance Haversine
+            getDistance(lat1, lon1, lat2, lon2) {
+                const R = 6371;
+                const dLat = this.deg2rad(lat2 - lat1);
+                const dLon = this.deg2rad(lon2 - lon1);
+                const a = Math.sin(dLat / 2) ** 2 +
+                          Math.cos(this.deg2rad(lat1)) * Math.cos(this.deg2rad(lat2)) *
+                          Math.sin(dLon / 2) ** 2;
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+                return R * c;
+            },
+
+            deg2rad(deg) {
+                return deg * (Math.PI / 180);
+            },
+
+            // Afficher/masquer chargement
+            showLoading(show) {
+                document.getElementById('loading').classList.toggle('active', show);
+            },
+
+            // Démarrage auto mobile
+            checkMobileAutoStart() {
+                if (/Mobi|Android|iPhone/i.test(navigator.userAgent)) {
+                    setTimeout(() => {
+                        if (confirm('Lancer la surveillance GPS automatiquement ?')) {
+                            this.start();
+                        }
+                    }, 1500);
+                }
+            }
+        };
+
+        // Initialisation au chargement
+        window.addEventListener('DOMContentLoaded', () => app.init());
+    </script>
+</body>
+</html>
