@@ -2,60 +2,279 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Test Carte Leaflet - Fix 2026</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5n/N0RDwR4=" crossorigin=""/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TeslaSentinel | Détection Avancée</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        html, body, #map-container, #map {
-            height: 100%;
+        :root {
+            --tesla-red: #e53e3e;
+            --tesla-blue: #3e89e5;
+            --tesla-dark: #1a1a2e;
+            --tesla-darker: #16213e;
+            --tesla-glow: 0 0 15px rgba(62, 137, 229, 0.7);
+            --tesla-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        * {
             margin: 0;
             padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', sans-serif;
         }
+
         body {
-            font-family: Arial, sans-serif;
-            background: #111;
-            color: #eee;
+            background: var(--tesla-darker);
+            color: white;
+            height: 100vh;
+            overflow: hidden;
+            touch-action: manipulation;
         }
-        h1 { text-align: center; margin: 10px 0; color: #0f0; }
-        #status { text-align: center; padding: 10px; background: rgba(0,0,0,0.6); }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            padding: 15px;
+            gap: 15px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 15px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 15px;
+            box-shadow: var(--tesla-shadow);
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            color: var(--tesla-blue);
+            text-shadow: var(--tesla-glow);
+        }
+
+        .status-bar {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 12px 15px;
+            border-radius: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: var(--tesla-shadow);
+        }
+
+        .status-text {
+            font-size: 14px;
+            color: #a0a0a0;
+        }
+
+        .speed-display {
+            font-size: 32px;
+            font-weight: bold;
+            color: var(--tesla-blue);
+            text-shadow: var(--tesla-glow);
+        }
+
+        .map-container {
+            flex: 1;
+            position: relative;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: var(--tesla-shadow);
+            background: #000;
+        }
+
+        #map {
+            height: 100%;
+            width: 100%;
+            z-index: 1;
+        }
+
+        .radar-alert {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(229, 62, 62, 0.9);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 50px;
+            font-weight: bold;
+            display: none;
+            z-index: 1000;
+            box-shadow: 0 0 20px rgba(229, 62, 62, 0.7);
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: translateX(-50%) scale(1); }
+            50% { transform: translateX(-50%) scale(1.05); }
+            100% { transform: translateX(-50%) scale(1); }
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            padding: 15px;
+        }
+
+        .control-btn {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: none;
+            background: var(--tesla-blue);
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: var(--tesla-shadow);
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .control-btn:active {
+            transform: scale(0.95);
+            box-shadow: 0 0 10px rgba(62, 137, 229, 0.5);
+        }
+
+        .control-btn.stop {
+            background: var(--tesla-red);
+        }
+
+        .radar-list {
+            position: absolute;
+            right: 15px;
+            top: 15px;
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 12px;
+            padding: 10px;
+            max-height: 70vh;
+            overflow-y: auto;
+            width: 280px;
+            z-index: 100;
+            display: none;
+        }
+
+        .radar-list.visible {
+            display: block;
+        }
+
+        .radar-item {
+            background: rgba(0, 0, 0, 0.3);
+            margin: 5px 0;
+            padding: 10px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .radar-item.highlight {
+            background: rgba(229, 62, 62, 0.5);
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .radar-toggle {
+            position: absolute;
+            right: 15px;
+            top: 15px;
+            width: 40px;
+            height: 40px;
+            background: var(--tesla-blue);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 101;
+            box-shadow: var(--tesla-shadow);
+        }
+
+        .settings-panel {
+            position: absolute;
+            left: 15px;
+            top: 15px;
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 12px;
+            padding: 15px;
+            width: 250px;
+            z-index: 101;
+            display: none;
+        }
+
+        .settings-panel.visible {
+            display: block;
+        }
+
+        .setting-item {
+            margin: 10px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 50px;
+            height: 24px;
+            background: #555;
+            border-radius: 12px;
+            cursor: pointer;
+        }
+
+        .toggle-switch.active {
+            background: var(--tesla-blue);
+        }
+
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: white;
+            top: 2px;
+            left: 2px;
+            transition: transform 0.2s;
+        }
+
+        .toggle-switch.active::after {
+            transform: translateX(26px);
+        }
+
+        .warning {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(255, 193, 7, 0.9);
+            color: black;
+            padding: 10px;
+            text-align: center;
+            font-size: 12px;
+            z-index: 1000;
+        }
+
+        @media (max-width: 768px) {
+            .radar-list {
+                width: 250px;
+            }
+
+            .settings-panel {
+                width: 220px;
+            }
+        }
     </style>
 </head>
 <body>
-    <h1>Test Carte Leaflet Simple (devrait marcher)</h1>
-    <div id="status">Chargement de la carte...</div>
-
-    <div id="map-container">
-        <div id="map"></div>
-    </div>
-
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    <script>
-        // Création de la carte
-        var map = L.map('map').setView([47.0, 3.0], 10);  // Centré sur Bourgogne / Chaulgnes
-
-        // Tuiles OSM officielles (source la plus fiable en 2026)
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-            maxZoom: 19,
-            tileSize: 256,
-            zoomOffset: 0
-        }).addTo(map);
-
-        // Marqueur test (près de Chaulgnes)
-        L.marker([47.13, 3.13]).addTo(map)
-            .bindPopup("Ici près de Chaulgnes !")
-            .openPopup();
-
-        // Force le recalcul de la taille (très important !)
-        setTimeout(function() {
-            map.invalidateSize();
-            document.getElementById('status').textContent = "Carte chargée ! Zoome/déplace pour tester.";
-        }, 500);
-
-        // Redéclenchement sur resize de la fenêtre (au cas où)
-        window.addEventListener('resize', function() {
-            map.invalidateSize();
-        });
-    </script>
-</body>
-</html>
