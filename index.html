@@ -3,49 +3,109 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TESLΔPILOT — RADAR DETECTION v2.6</title>
+    <title>TESLΔPILOT — RADAR DETECTION v3.0</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         :root {
-            --bg: #0a0e14;
-            --neon-cyan: #00f0ff;
-            --neon-magenta: #ff00aa;
-            --neon-green: #39ff14;
-            --text: #e0f7ff;
-            --alert: #ff2a6d;
-            --panel: rgba(10, 20, 40, 0.65);
+            --bg: #0b0014;
+            --primary: #e040fb;      /* Violet-magenta néon */
+            --secondary: #00ffff;    /* Cyan électrique pour accents */
+            --electric-blue: #0088ff; /* Bleu intense pour position user */
+            --alert: #ff0048;
+            --text: #d0bfff;
+            --panel: rgba(15, 5, 40, 0.55);
+            --grid: rgba(224, 64, 251, 0.08);
         }
         body {
             margin: 0;
-            font-family: 'Courier New', Courier, monospace;
+            padding: 0;
+            font-family: 'Orbitron', 'Courier New', monospace;
             background: var(--bg);
             color: var(--text);
             height: 100vh;
             overflow: hidden;
             position: relative;
         }
+        /* Fond animé : grid + scanlines + particules */
         body::before {
             content: '';
             position: absolute;
             inset: 0;
-            background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,240,255,0.03) 2px, rgba(0,240,255,0.03) 4px);
+            background: 
+                linear-gradient(90deg, transparent 99%, var(--grid) 100%),
+                linear-gradient(transparent 99%, var(--grid) 100%);
+            background-size: 50px 50px;
+            animation: gridMove 20s linear infinite;
             pointer-events: none;
             z-index: 1;
-            opacity: 0.4;
         }
-        h1 {
-            margin: 8px 0 4px;
-            font-size: 2.2rem;
-            text-shadow: 0 0 10px var(--neon-cyan), 0 0 20px var(--neon-cyan);
-            letter-spacing: 4px;
-            text-transform: uppercase;
+        body::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: repeating-linear-gradient(0deg, transparent, transparent 4px, rgba(0,255,255,0.05) 4px, rgba(0,255,255,0.05) 8px);
+            pointer-events: none;
+            z-index: 2;
+            animation: scanlines 8s linear infinite;
         }
-        .subtitle { font-size: 0.9rem; opacity: 0.7; margin: 0; }
-        #hud {
+        @keyframes gridMove {
+            0% { background-position: 0 0; }
+            100% { background-position: 50px 50px; }
+        }
+        @keyframes scanlines {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(8px); }
+        }
+        /* Particules flottantes */
+        .particles {
             position: absolute;
             inset: 0;
             pointer-events: none;
+            z-index: 3;
+            overflow: hidden;
+        }
+        .particle {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: var(--primary);
+            box-shadow: 0 0 8px var(--primary);
+            animation: float 15s linear infinite;
+        }
+        @keyframes float {
+            0% { transform: translateY(100vh) translateX(0); opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { transform: translateY(-100px) translateX(100px); opacity: 0; }
+        }
+        h1 {
+            margin: 0;
+            font-size: 2.8rem;
+            font-weight: 900;
+            letter-spacing: 8px;
+            text-transform: uppercase;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 20px var(--primary);
+            animation: titleGlow 3s ease-in-out infinite alternate;
+        }
+        @keyframes titleGlow {
+            from { text-shadow: 0 0 20px var(--primary); }
+            to { text-shadow: 0 0 40px var(--primary), 0 0 60px var(--secondary); }
+        }
+        .subtitle {
+            font-size: 1rem;
+            opacity: 0.8;
+            letter-spacing: 3px;
+            color: var(--secondary);
+        }
+        #hud {
+            position: absolute;
+            inset: 0;
+            padding: 20px;
+            pointer-events: none;
             z-index: 10;
-            padding: 12px;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
@@ -53,107 +113,141 @@
         #top-bar {
             display: flex;
             justify-content: space-between;
-            align-items: center;
+            align-items: flex-start;
         }
         #status, #nearest {
             background: var(--panel);
-            backdrop-filter: blur(8px);
-            border: 1px solid var(--neon-cyan);
-            border-radius: 6px;
-            padding: 10px 14px;
-            box-shadow: 0 0 15px rgba(0,240,255,0.3);
-            margin: 8px 0;
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--primary);
+            border-radius: 8px;
+            padding: 12px 18px;
+            box-shadow: 0 0 20px rgba(224,64,251,0.4);
+            font-size: 0.95rem;
+            letter-spacing: 1px;
         }
         #nearest {
             border-color: var(--alert);
-            box-shadow: 0 0 20px var(--alert);
-            animation: pulse 2s infinite alternate;
+            box-shadow: 0 0 30px var(--alert);
+            animation: alertPulse 1.5s infinite alternate;
         }
-        @keyframes pulse {
+        @keyframes alertPulse {
             from { box-shadow: 0 0 20px var(--alert); }
-            to   { box-shadow: 0 0 35px var(--alert), 0 0 50px rgba(255,42,109,0.6); }
+            to { box-shadow: 0 0 50px var(--alert), 0 0 80px rgba(255,0,72,0.6); }
         }
         #map-container {
             flex: 1;
             position: relative;
+            border: 2px solid var(--primary);
+            border-radius: 12px;
+            overflow: hidden;
+            margin: 15px 0;
+            box-shadow: 0 0 40px rgba(224,64,251,0.3);
         }
         #map {
             height: 100%;
-            filter: brightness(0.8) contrast(1.2) hue-rotate(190deg) saturate(1.4);
+            filter: brightness(0.7) contrast(1.4) saturate(1.6);
         }
         .controls {
             display: flex;
             justify-content: center;
-            gap: 12px;
+            gap: 20px;
             flex-wrap: wrap;
-            margin: 10px 0;
+            pointer-events: auto;
         }
         button {
             background: transparent;
-            border: 2px solid var(--neon-cyan);
-            color: var(--neon-cyan);
-            padding: 10px 20px;
-            font-size: 1rem;
-            cursor: pointer;
-            border-radius: 4px;
+            border: 2px solid var(--primary);
+            color: var(--primary);
+            padding: 14px 28px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            letter-spacing: 3px;
             text-transform: uppercase;
-            letter-spacing: 2px;
-            transition: all 0.3s;
-            box-shadow: 0 0 10px var(--neon-cyan);
-            pointer-events: auto;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.4s;
+            box-shadow: 0 0 15px var(--primary);
         }
         button:hover {
-            background: var(--neon-cyan);
+            background: var(--primary);
             color: #000;
-            box-shadow: 0 0 25px var(--neon-cyan);
+            box-shadow: 0 0 40px var(--primary);
+            transform: translateY(-3px);
         }
-        button.danger { border-color: var(--alert); color: var(--alert); }
-        button.danger:hover { background: var(--alert); color: #000; }
-        .glitch {
-            animation: glitch 1.5s infinite;
+        button.danger {
+            border-color: var(--alert);
+            color: var(--alert);
+            box-shadow: 0 0 15px var(--alert);
         }
-        @keyframes glitch {
-            0%   { text-shadow: 2px 0 var(--neon-magenta), -2px 0 var(--neon-cyan); }
-            10%  { text-shadow: -2px 0 var(--neon-magenta), 2px 0 var(--neon-cyan); }
-            20%  { text-shadow: none; }
-            100% { text-shadow: none; }
+        button.danger:hover {
+            background: var(--alert);
+            box-shadow: 0 0 50px var(--alert);
         }
         #history {
             background: var(--panel);
-            border: 1px solid var(--neon-green);
-            padding: 10px;
-            font-size: 0.85rem;
-            max-height: 120px;
+            border: 1px solid var(--secondary);
+            padding: 12px;
+            border-radius: 8px;
+            max-height: 140px;
             overflow-y: auto;
-            border-radius: 6px;
+            font-size: 0.9rem;
+            letter-spacing: 1px;
         }
         .toast {
             position: fixed;
-            bottom: 100px;
+            bottom: 120px;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(0,0,0,0.7);
-            border: 2px solid var(--alert);
+            background: rgba(0,0,0,0.8);
+            border: 3px solid var(--alert);
             color: var(--alert);
-            padding: 14px 28px;
-            border-radius: 6px;
-            font-size: 1.3rem;
-            box-shadow: 0 0 30px var(--alert);
+            padding: 18px 40px;
+            border-radius: 10px;
+            font-size: 1.6rem;
+            font-weight: bold;
+            box-shadow: 0 0 50px var(--alert);
             z-index: 999;
-            animation: glitch 0.8s, fadeOut 6s forwards;
+            animation: toastIn 0.6s, toastGlow 2s infinite alternate, fadeOut 5s 1s forwards;
             pointer-events: none;
+            letter-spacing: 4px;
         }
-        @keyframes fadeOut { to { opacity: 0; transform: translate(-50%, 30px); } }
+        @keyframes toastIn {
+            from { opacity: 0; transform: translateX(-50%) translateY(50px); }
+            to { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
+        @keyframes toastGlow {
+            from { box-shadow: 0 0 30px var(--alert); }
+            to { box-shadow: 0 0 80px var(--alert); }
+        }
+        @keyframes fadeOut {
+            to { opacity: 0; transform: translateX(-50%) translateY(-50px); }
+        }
+        /* Marqueur utilisateur bleu électrique */
+        .user-marker {
+            color: var(--electric-blue) !important;
+            font-size: 36px;
+            text-shadow: 0 0 15px var(--electric-blue), 0 0 30px var(--electric-blue);
+            animation: userPulse 2s infinite alternate;
+        }
+        @keyframes userPulse {
+            from { text-shadow: 0 0 15px var(--electric-blue); }
+            to { text-shadow: 0 0 30px var(--electric-blue), 0 0 50px var(--electric-blue); }
+        }
     </style>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
 </head>
 <body>
+    <div class="particles" id="particles"></div>
+
     <div id="hud">
         <div id="top-bar">
-            <h1 class="glitch">TESLΔPILOT</h1>
-            <span class="subtitle">v2.6 — NEON SCAN MODE</span>
+            <div>
+                <h1>TESLΔPILOT</h1>
+                <div class="subtitle">v3.0 — NEURAL RADAR MATRIX</div>
+            </div>
         </div>
 
-        <div id="status">INITIALISATION SYSTÈME... ATTENTE SIGNAL GPS</div>
+        <div id="status">INITIALISATION NEURALE... CONNEXION GPS</div>
         <div id="nearest" style="display:none;"></div>
 
         <div id="map-container">
@@ -161,16 +255,28 @@
         </div>
 
         <div class="controls">
-            <button id="start">▶ LANCER SCAN</button>
-            <button id="stop" class="danger">■ STOP</button>
+            <button id="start">▶ ACTIVATION</button>
+            <button id="stop" class="danger">■ ARRÊT</button>
             <button id="testMode">🧪 SIMULATION</button>
         </div>
 
-        <div id="history"><strong>LOG ALERTES :</strong><br>--- vide ---</div>
+        <div id="history"><strong>LOG NEURAL :</strong><br>--- en attente ---</div>
     </div>
 
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        let map, userMarker, userCone;
+        // Particules aléatoires
+        const particlesContainer = document.getElementById('particles');
+        for (let i = 0; i < 40; i++) {
+            const p = document.createElement('div');
+            p.className = 'particle';
+            p.style.left = Math.random() * 100 + 'vw';
+            p.style.animationDelay = Math.random() * 15 + 's';
+            p.style.animationDuration = (10 + Math.random() * 20) + 's';
+            particlesContainer.appendChild(p);
+        }
+
+        let map, userMarker;
         let radars = {};
         let watchId = null;
         let lastAlerted = new Set();
@@ -205,20 +311,27 @@
 
         function updateHistory(id, type, dist) {
             history.unshift(`${new Date().toLocaleTimeString()} → ${type} ${id} @ ${dist.toFixed(2)}km`);
-            if (history.length > 6) history.pop();
-            document.getElementById('history').innerHTML = '<strong>LOG ALERTES :</strong><br>' + (history.length ? history.join('<br>') : '--- vide ---');
+            if (history.length > 8) history.pop();
+            document.getElementById('history').innerHTML = '<strong>LOG NEURAL :</strong><br>' + (history.length ? history.join('<br>') : '--- en attente ---');
         }
 
         function processPosition(pos) {
             const { latitude: lat, longitude: lon, speed, accuracy } = pos.coords;
             const spd = speed ? Math.round(speed * 3.6) : '??';
-            document.getElementById('status').textContent = `POS: ${lat.toFixed(5)},${lon.toFixed(5)}  •  SPD: ${spd} km/h  •  ACC: ±${Math.round(accuracy||'?')}m`;
+            document.getElementById('status').textContent = `POS: ${lat.toFixed(5)}° ${lon.toFixed(5)}° • V: ${spd} km/h • PRÉC: ±${Math.round(accuracy||0)}m`;
 
             if (!userMarker) {
                 userMarker = L.marker([lat, lon], {
-                    icon: L.divIcon({className: 'neon-marker', html: '▲', iconSize: [30,30]})
+                    icon: L.divIcon({
+                        className: 'user-marker',
+                        html: '▼',
+                        iconSize: [40, 40],
+                        iconAnchor: [20, 40]
+                    })
                 }).addTo(map);
-            } else userMarker.setLatLng([lat, lon]);
+            } else {
+                userMarker.setLatLng([lat, lon]);
+            }
 
             map.setView([lat, lon], 15, {animate: true});
 
@@ -230,7 +343,7 @@
                 if (dist < minDist) { minDist = dist; nearest = {id, ...rad}; }
 
                 if (dist < 0.5 && !lastAlerted.has(id)) {
-                    const msg = `!!! RADAR ${rad.type} ${Math.round(dist*1000)}m !!! LIM ${rad.vitesse}`;
+                    const msg = `ALERTE RADAR ${rad.type} — ${Math.round(dist*1000)}m — LIMITE ${rad.vitesse}`;
                     showToast(msg);
                     lastAlerted.add(id);
                     setTimeout(() => lastAlerted.delete(id), 90000);
@@ -241,7 +354,9 @@
             if (nearest) {
                 const el = document.getElementById('nearest');
                 el.style.display = 'block';
-                el.innerHTML = `NEAREST: ${nearest.type} • ${minDist.toFixed(2)}km • LIM ${nearest.vitesse}`;
+                el.innerHTML = `MENACE PROCHE → ${nearest.type} • ${minDist.toFixed(2)} km • LIM ${nearest.vitesse}`;
+            } else {
+                document.getElementById('nearest').style.display = 'none';
             }
         }
 
@@ -250,62 +365,73 @@
                 .then(r => r.json())
                 .then(data => {
                     radars = data;
-                    document.getElementById('status').textContent = `SCAN READY — ${Object.keys(radars).length} ÉMETTEURS DÉTECTÉS`;
+                    document.getElementById('status').textContent = `MATRICE CHARGÉE — ${Object.keys(radars).length} ÉMETTEURS DÉTECTÉS`;
                     initMap();
                 })
-                .catch(() => document.getElementById('status').textContent = 'ERREUR CHARGEMENT RADARS.JSON');
+                .catch(err => {
+                    document.getElementById('status').textContent = 'ERREUR CONNEXION BASE RADARS';
+                });
         }
 
         function initMap() {
-            map = L.map('map', {zoomControl: false, attributionControl: false}).setView([46.5, 2.5], 6);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {opacity: 0.4}).addTo(map);
+            map = L.map('map', {
+                zoomControl: false,
+                attributionControl: false
+            }).setView([46.5, 2.5], 6);
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                opacity: 0.3
+            }).addTo(map);
 
             Object.entries(radars).forEach(([id, obj]) => {
                 const r = getRadar(obj);
                 if (r.lat) {
-                    L.circleMarker([r.lat, r.lon], {radius: 10, color: 'var(--alert)', fillOpacity: 0.6})
-                        .addTo(map)
-                        .bindPopup(`ID:${id} • ${r.type} • ${r.vitesse}`);
+                    L.circleMarker([r.lat, r.lon], {
+                        radius: 10,
+                        color: '#ff0048',
+                        weight: 2,
+                        fillOpacity: 0.7
+                    })
+                    .addTo(map)
+                    .bindPopup(`ID:${id}<br>${r.type}<br>LIM: ${r.vitesse} km/h`);
                 }
             });
+
             setTimeout(() => map.invalidateSize(), 300);
         }
 
         document.getElementById('start').onclick = () => {
             if (watchId) return;
             watchId = navigator.geolocation.watchPosition(processPosition, e => {
-                document.getElementById('status').textContent = 'GPS ERROR: ' + e.message;
-            }, {enableHighAccuracy: true, timeout: 5000});
-            showToast('SCAN GPS ACTIVÉ');
+                document.getElementById('status').textContent = 'ERREUR GPS: ' + e.message;
+            }, {enableHighAccuracy: true, maximumAge: 0, timeout: 10000});
+            showToast('NEURAL SCAN ACTIVÉ');
         };
 
         document.getElementById('stop').onclick = () => {
             if (watchId) navigator.geolocation.clearWatch(watchId);
             watchId = null;
             clearInterval(testInterval);
-            showToast('SCAN TERMINÉ');
+            showToast('SYSTÈME EN VEILLE');
         };
 
         document.getElementById('testMode').onclick = () => {
             if (testInterval) {
                 clearInterval(testInterval);
                 testInterval = null;
-                showToast('SIMU STOP');
+                showToast('SIMULATION STOPPÉE');
                 return;
             }
-            showToast('SIMULATION LANCÉE');
-            let lat = 46.6, step = -0.001;
+            showToast('MODE SIMULATION');
+            let lat = 46.6;
+            let step = -0.001;
             testInterval = setInterval(() => {
                 lat += step;
-                processPosition({coords: {latitude: lat, longitude: 3.0, speed: 25, accuracy: 5}});
+                processPosition({coords: {latitude: lat, longitude: 3.0, speed: 28, accuracy: 5}});
             }, 800);
         };
 
-        // START
         loadRadars();
     </script>
-
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </body>
 </html>
