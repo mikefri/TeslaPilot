@@ -3,243 +3,579 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TeslaPilot - Détecteur Radars</title>
+    <title>TeslaPilot Pro - Détecteur Radars Nouvelle Génération</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;500;700&display=swap');
+
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
 
+        :root {
+            --neon-blue: #00f3ff;
+            --neon-pink: #ff00ff;
+            --neon-green: #00ff88;
+            --neon-red: #ff0055;
+            --dark-bg: #0a0a0f;
+            --card-bg: rgba(20, 20, 35, 0.9);
+        }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
+            font-family: 'Rajdhani', sans-serif;
+            background: radial-gradient(ellipse at bottom, #1b2735 0%, #090a0f 100%);
             color: white;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* Animation étoiles en arrière-plan */
+        .stars {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .star {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: white;
+            border-radius: 50%;
+            animation: twinkle 3s infinite;
+        }
+
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 1; }
         }
 
         .header {
-            padding: 1rem;
-            background: rgba(0, 0, 0, 0.3);
-            backdrop-filter: blur(10px);
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 1.5rem;
+            background: linear-gradient(135deg, rgba(0, 243, 255, 0.1) 0%, rgba(255, 0, 255, 0.1) 100%);
+            backdrop-filter: blur(20px);
+            border-bottom: 2px solid var(--neon-blue);
+            box-shadow: 0 0 30px rgba(0, 243, 255, 0.3);
+            position: relative;
+            z-index: 10;
         }
 
         .header h1 {
-            font-size: 1.5rem;
-            margin-bottom: 0.5rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 2rem;
+            font-weight: 900;
+            text-align: center;
+            background: linear-gradient(90deg, var(--neon-blue), var(--neon-pink), var(--neon-green));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: 0 0 20px rgba(0, 243, 255, 0.5);
+            letter-spacing: 3px;
+            animation: glow 2s ease-in-out infinite;
         }
 
-        .warning {
-            font-size: 0.75rem;
-            color: #ffd700;
-            padding: 0.5rem;
-            background: rgba(255, 215, 0, 0.1);
-            border-radius: 4px;
-            border-left: 3px solid #ffd700;
+        @keyframes glow {
+            0%, 100% { filter: brightness(1); }
+            50% { filter: brightness(1.3); }
+        }
+
+        .subtitle {
+            text-align: center;
+            margin-top: 0.5rem;
+            font-size: 0.9rem;
+            color: var(--neon-green);
+            text-transform: uppercase;
+            letter-spacing: 2px;
         }
 
         .controls {
-            padding: 1rem;
+            padding: 1.5rem;
             display: flex;
-            gap: 0.5rem;
-            flex-wrap: wrap;
+            gap: 1rem;
             justify-content: center;
-            background: rgba(0, 0, 0, 0.2);
+            flex-wrap: wrap;
+            position: relative;
+            z-index: 10;
         }
 
         .btn {
-            padding: 0.75rem 1.5rem;
-            font-size: 1rem;
-            border: none;
-            border-radius: 8px;
+            padding: 1rem 2.5rem;
+            font-size: 1.1rem;
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 700;
+            border: 2px solid;
+            border-radius: 50px;
             cursor: pointer;
-            font-weight: 600;
             transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        .btn:hover::before {
+            width: 300px;
+            height: 300px;
         }
 
         .btn-start {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            background: linear-gradient(135deg, #00f3ff 0%, #0088ff 100%);
+            border-color: var(--neon-blue);
+            color: #000;
+            box-shadow: 0 0 30px rgba(0, 243, 255, 0.6);
         }
 
         .btn-start:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+            transform: translateY(-3px) scale(1.05);
+            box-shadow: 0 0 50px rgba(0, 243, 255, 0.9);
         }
 
         .btn-stop {
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            background: linear-gradient(135deg, #ff0055 0%, #ff6600 100%);
+            border-color: var(--neon-red);
             color: white;
+            box-shadow: 0 0 30px rgba(255, 0, 85, 0.6);
         }
 
         .btn-stop:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(245, 87, 108, 0.4);
+            transform: translateY(-3px) scale(1.05);
+            box-shadow: 0 0 50px rgba(255, 0, 85, 0.9);
         }
 
         .btn:disabled {
-            opacity: 0.5;
+            opacity: 0.3;
             cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn:disabled:hover {
             transform: none;
         }
 
-        .status-panel {
+        .dashboard {
             padding: 1rem;
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 1rem;
+            position: relative;
+            z-index: 10;
         }
 
-        .status-card {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border-radius: 12px;
-            padding: 1rem;
-            border: 1px solid rgba(255, 255, 255, 0.2);
+        .metric-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            padding: 1.5rem;
+            border: 2px solid rgba(0, 243, 255, 0.3);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
         }
 
-        .status-card h3 {
-            font-size: 0.875rem;
-            color: rgba(255, 255, 255, 0.7);
+        .metric-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, transparent, rgba(0, 243, 255, 0.1), transparent);
+            animation: scan 3s linear infinite;
+        }
+
+        @keyframes scan {
+            0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+            100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
+        }
+
+        .metric-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--neon-blue);
+            box-shadow: 0 12px 40px rgba(0, 243, 255, 0.4);
+        }
+
+        .metric-icon {
+            font-size: 2.5rem;
             margin-bottom: 0.5rem;
+            filter: drop-shadow(0 0 10px currentColor);
+        }
+
+        .metric-label {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.6);
             text-transform: uppercase;
             letter-spacing: 1px;
+            margin-bottom: 0.5rem;
         }
 
-        .status-card .value {
-            font-size: 1.5rem;
-            font-weight: bold;
-            color: #fff;
+        .metric-value {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 2rem;
+            font-weight: 900;
+            background: linear-gradient(90deg, var(--neon-blue), var(--neon-green));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .alert-zone {
+            margin: 1rem;
+            position: relative;
+            z-index: 20;
         }
 
         .alert-box {
             display: none;
-            margin: 1rem;
-            padding: 1rem;
-            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(255, 107, 107, 0.4);
-            animation: pulse 2s infinite;
+            padding: 2rem;
+            background: linear-gradient(135deg, #ff0055 0%, #ff6600 100%);
+            border-radius: 25px;
+            box-shadow: 0 0 60px rgba(255, 0, 85, 0.8);
+            border: 3px solid #fff;
+            animation: alertPulse 1s infinite, shake 0.5s infinite;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .alert-box::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: repeating-linear-gradient(
+                45deg,
+                transparent,
+                transparent 10px,
+                rgba(255, 255, 255, 0.1) 10px,
+                rgba(255, 255, 255, 0.1) 20px
+            );
+            animation: stripes 1s linear infinite;
+        }
+
+        @keyframes alertPulse {
+            0%, 100% { box-shadow: 0 0 60px rgba(255, 0, 85, 0.8); }
+            50% { box-shadow: 0 0 100px rgba(255, 0, 85, 1); }
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        @keyframes stripes {
+            0% { transform: translateX(0) translateY(0); }
+            100% { transform: translateX(20px) translateY(20px); }
         }
 
         .alert-box.active {
             display: block;
         }
 
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.8; }
+        .alert-content {
+            position: relative;
+            z-index: 1;
         }
 
         .alert-box h2 {
-            font-size: 1.25rem;
-            margin-bottom: 0.5rem;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            text-align: center;
+            text-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .alert-box p {
+            font-size: 1.3rem;
+            text-align: center;
+            font-weight: 700;
+            text-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
         }
 
         #map {
             flex: 1;
             min-height: 400px;
             position: relative;
+            z-index: 5;
+            border-top: 2px solid var(--neon-blue);
+            box-shadow: 0 -10px 40px rgba(0, 243, 255, 0.3);
         }
 
-        .radar-marker {
-            background: #ff4444;
-            border: 3px solid white;
+        /* Style personnalisé pour les marqueurs radar */
+        .radar-pulse {
+            width: 60px;
+            height: 60px;
+            position: relative;
+        }
+
+        .radar-pulse::before,
+        .radar-pulse::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
             border-radius: 50%;
+            border: 3px solid #ff0055;
+            animation: radarPulse 2s ease-out infinite;
+        }
+
+        .radar-pulse::after {
+            animation-delay: 1s;
+        }
+
+        @keyframes radarPulse {
+            0% {
+                width: 20px;
+                height: 20px;
+                opacity: 1;
+            }
+            100% {
+                width: 60px;
+                height: 60px;
+                opacity: 0;
+            }
+        }
+
+        .radar-core {
             width: 20px;
             height: 20px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            background: linear-gradient(135deg, #ff0055, #ff6600);
+            border: 3px solid white;
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 20px #ff0055, inset 0 0 10px rgba(255, 255, 255, 0.5);
+            animation: glow 1s ease-in-out infinite;
         }
 
         .loading {
             position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(0, 0, 0, 0.8);
-            padding: 2rem;
-            border-radius: 12px;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
             display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
         }
 
         .loading.active {
-            display: block;
+            display: flex;
+        }
+
+        .loading-content {
+            text-align: center;
         }
 
         .spinner {
-            border: 4px solid rgba(255, 255, 255, 0.3);
-            border-top: 4px solid white;
+            width: 80px;
+            height: 80px;
+            border: 6px solid rgba(0, 243, 255, 0.2);
+            border-top: 6px solid var(--neon-blue);
             border-radius: 50%;
-            width: 40px;
-            height: 40px;
             animation: spin 1s linear infinite;
-            margin: 0 auto;
+            margin: 0 auto 2rem;
+            box-shadow: 0 0 40px rgba(0, 243, 255, 0.6);
         }
 
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+
+        .loading-text {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.5rem;
+            color: var(--neon-blue);
+            text-shadow: 0 0 20px rgba(0, 243, 255, 0.8);
+        }
+
+        /* Popup personnalisé pour les radars */
+        .leaflet-popup-content-wrapper {
+            background: var(--card-bg);
+            backdrop-filter: blur(20px);
+            border: 2px solid var(--neon-red);
+            border-radius: 15px;
+            box-shadow: 0 0 30px rgba(255, 0, 85, 0.6);
+            font-family: 'Rajdhani', sans-serif;
+        }
+
+        .leaflet-popup-content {
+            margin: 15px;
+            font-size: 1rem;
+            line-height: 1.6;
+        }
+
+        .leaflet-popup-tip {
+            background: var(--card-bg);
+            border: 2px solid var(--neon-red);
+        }
+
+        .popup-title {
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 700;
+            color: var(--neon-red);
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+            text-shadow: 0 0 10px rgba(255, 0, 85, 0.5);
+        }
+
+        .popup-info {
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        /* Animation d'entrée */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .metric-card {
+            animation: fadeInUp 0.6s ease-out;
+        }
+
+        .metric-card:nth-child(1) { animation-delay: 0.1s; }
+        .metric-card:nth-child(2) { animation-delay: 0.2s; }
+        .metric-card:nth-child(3) { animation-delay: 0.3s; }
+        .metric-card:nth-child(4) { animation-delay: 0.4s; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 1.5rem;
+            }
+
+            .btn {
+                padding: 0.8rem 1.5rem;
+                font-size: 0.9rem;
+            }
+
+            .metric-value {
+                font-size: 1.5rem;
+            }
+
+            .alert-box h2 {
+                font-size: 1.5rem;
+            }
+
+            .alert-box p {
+                font-size: 1rem;
+            }
+        }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>🚨 TeslaPilot - Détecteur Radars</h1>
+    <!-- Étoiles animées -->
+    <div class="stars" id="stars"></div>
 
+    <div class="header">
+        <h1>⚡ TESLAPILOT PRO ⚡</h1>
+        <div class="subtitle">Détecteur Radars Nouvelle Génération</div>
     </div>
 
     <div class="controls">
         <button class="btn btn-start" id="startBtn" onclick="app.start()">
-            ▶️ Démarrer GPS
+            <span style="position: relative; z-index: 1;">▶ Activer GPS</span>
         </button>
         <button class="btn btn-stop" id="stopBtn" onclick="app.stop()" disabled>
-            ⏹️ Arrêter
+            <span style="position: relative; z-index: 1;">⏹ Désactiver</span>
         </button>
     </div>
 
-    <div class="status-panel">
-        <div class="status-card">
-            <h3>📡 Radars chargés</h3>
-            <div class="value" id="radarCount">0</div>
+    <div class="dashboard">
+        <div class="metric-card">
+            <div class="metric-icon">📡</div>
+            <div class="metric-label">Radars chargés</div>
+            <div class="metric-value" id="radarCount">0</div>
         </div>
-        <div class="status-card">
-            <h3>📍 Position GPS</h3>
-            <div class="value" id="gpsPosition">En attente...</div>
+        <div class="metric-card">
+            <div class="metric-icon">📍</div>
+            <div class="metric-label">Position GPS</div>
+            <div class="metric-value" id="gpsPosition" style="font-size: 1rem;">En attente...</div>
         </div>
-        <div class="status-card">
-            <h3>🚗 Vitesse</h3>
-            <div class="value" id="speedDisplay">0 km/h</div>
+        <div class="metric-card">
+            <div class="metric-icon">🚗</div>
+            <div class="metric-label">Vitesse actuelle</div>
+            <div class="metric-value" id="speedDisplay">0 km/h</div>
         </div>
-        <div class="status-card">
-            <h3>🎯 Radar proche</h3>
-            <div class="value" id="nearestRadar">Aucun</div>
+        <div class="metric-card">
+            <div class="metric-icon">🎯</div>
+            <div class="metric-label">Radar proche</div>
+            <div class="metric-value" id="nearestRadar">Aucun</div>
         </div>
     </div>
 
-    <div class="alert-box" id="alertBox">
-        <h2>🚨 ATTENTION RADAR!</h2>
-        <p id="alertText"></p>
+    <div class="alert-zone">
+        <div class="alert-box" id="alertBox">
+            <div class="alert-content">
+                <h2>🚨 ⚠️ ATTENTION RADAR ! ⚠️ 🚨</h2>
+                <p id="alertText"></p>
+            </div>
+        </div>
     </div>
 
     <div id="map"></div>
 
     <div class="loading" id="loading">
-        <div class="spinner"></div>
-        <p style="margin-top: 1rem;">Chargement des radars...</p>
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <div class="loading-text">CHARGEMENT DES RADARS...</div>
+        </div>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
+        // Génération des étoiles
+        function createStars() {
+            const starsContainer = document.getElementById('stars');
+            for (let i = 0; i < 100; i++) {
+                const star = document.createElement('div');
+                star.className = 'star';
+                star.style.left = Math.random() * 100 + '%';
+                star.style.top = Math.random() * 100 + '%';
+                star.style.animationDelay = Math.random() * 3 + 's';
+                starsContainer.appendChild(star);
+            }
+        }
+        createStars();
+
         const app = {
             radars: {},
             map: null,
@@ -249,7 +585,6 @@
             alertedRadars: new Set(),
             isRunning: false,
 
-            // Initialisation
             async init() {
                 this.showLoading(true);
                 await this.loadRadars();
@@ -259,7 +594,6 @@
                 this.checkMobileAutoStart();
             },
 
-            // Chargement des radars
             async loadRadars() {
                 try {
                     const response = await fetch('radars.json');
@@ -273,41 +607,50 @@
                 }
             },
 
-            // Initialisation carte
             initMap() {
                 this.map = L.map('map').setView([46.2276, 2.2137], 6);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    attribution: '© OpenStreetMap',
+                
+                // Style de carte sombre pour un look futuriste
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                    attribution: '© OpenStreetMap © CartoDB',
                     maxZoom: 19
                 }).addTo(this.map);
             },
 
-            // Afficher les radars sur la carte
             renderRadars() {
                 Object.entries(this.radars).forEach(([id, radar]) => {
                     const r = this.normalizeRadar(radar);
                     if (!r.lat || !r.lon) return;
 
-                    const marker = L.circleMarker([r.lat, r.lon], {
-                        radius: 8,
-                        fillColor: '#ff4444',
-                        color: '#fff',
-                        weight: 2,
-                        fillOpacity: 0.8
+                    // Création d'une icône personnalisée avec animation
+                    const radarIcon = L.divIcon({
+                        className: 'custom-radar-icon',
+                        html: `
+                            <div class="radar-pulse">
+                                <div class="radar-core"></div>
+                            </div>
+                        `,
+                        iconSize: [60, 60],
+                        iconAnchor: [30, 30]
+                    });
+
+                    const marker = L.marker([r.lat, r.lon], {
+                        icon: radarIcon
                     }).addTo(this.map);
 
                     marker.bindPopup(`
-                        <strong>Radar ${id}</strong><br>
-                        ${r.type}<br>
-                        ${r.direction}<br>
-                        Limite: ${r.vitesse} km/h
+                        <div class="popup-title">⚠️ RADAR ${id}</div>
+                        <div class="popup-info">
+                            <strong>Type:</strong> ${r.type}<br>
+                            <strong>Direction:</strong> ${r.direction}<br>
+                            <strong>Limite:</strong> <span style="color: var(--neon-red); font-weight: 700;">${r.vitesse} km/h</span>
+                        </div>
                     `);
 
                     this.radarMarkers.push(marker);
                 });
             },
 
-            // Normaliser les données radar
             normalizeRadar(radar) {
                 return {
                     type: radar.type || radar["Type de radar"] || 'Inconnu',
@@ -318,10 +661,9 @@
                 };
             },
 
-            // Démarrer surveillance GPS
             start() {
                 if (!navigator.geolocation) {
-                    alert('GPS non supporté par votre navigateur');
+                    alert('❌ GPS non supporté par votre navigateur');
                     return;
                 }
 
@@ -336,7 +678,6 @@
                 );
             },
 
-            // Arrêter surveillance
             stop() {
                 if (this.watchId !== null) {
                     navigator.geolocation.clearWatch(this.watchId);
@@ -348,47 +689,53 @@
                 }
             },
 
-            // Mise à jour position
             onPositionUpdate(pos) {
                 const lat = pos.coords.latitude;
                 const lon = pos.coords.longitude;
                 const speed = pos.coords.speed ? (pos.coords.speed * 3.6).toFixed(0) : 0;
 
-                // Mise à jour affichage
                 document.getElementById('gpsPosition').textContent = 
                     `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
                 document.getElementById('speedDisplay').textContent = `${speed} km/h`;
 
-                // Mise à jour marqueur utilisateur
                 this.updateUserMarker(lat, lon);
-
-                // Recherche radars proches
                 this.checkNearbyRadars(lat, lon, speed);
             },
 
-            // Erreur GPS
             onPositionError(err) {
                 console.error('Erreur GPS:', err);
                 alert(`❌ Erreur GPS: ${err.message}`);
             },
 
-            // Mise à jour marqueur utilisateur
             updateUserMarker(lat, lon) {
                 if (this.userMarker) {
                     this.userMarker.setLatLng([lat, lon]);
                 } else {
+                    // Marqueur utilisateur personnalisé
+                    const userIcon = L.divIcon({
+                        className: 'custom-user-icon',
+                        html: `
+                            <div style="
+                                width: 30px;
+                                height: 30px;
+                                background: linear-gradient(135deg, #00f3ff, #00ff88);
+                                border: 4px solid white;
+                                border-radius: 50%;
+                                box-shadow: 0 0 30px rgba(0, 243, 255, 0.8);
+                                animation: glow 1s ease-in-out infinite;
+                            "></div>
+                        `,
+                        iconSize: [30, 30],
+                        iconAnchor: [15, 15]
+                    });
+
                     this.userMarker = L.marker([lat, lon], {
-                        icon: L.icon({
-                            iconUrl: 'https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png',
-                            iconSize: [25, 41],
-                            iconAnchor: [12, 41]
-                        })
+                        icon: userIcon
                     }).addTo(this.map).bindPopup('🚙 Votre position');
                 }
                 this.map.setView([lat, lon], 13);
             },
 
-            // Vérifier radars proches
             checkNearbyRadars(lat, lon, speed) {
                 let closest = { dist: Infinity, id: null, radar: null };
 
@@ -402,13 +749,11 @@
                         closest = { dist, id, radar };
                     }
 
-                    // Alerte à 500m
                     if (dist <= 0.5 && !this.alertedRadars.has(id)) {
                         this.triggerAlert(id, radar, dist);
                     }
                 });
 
-                // Afficher radar le plus proche
                 if (closest.id) {
                     document.getElementById('nearestRadar').textContent = 
                         `${closest.dist.toFixed(2)} km`;
@@ -417,28 +762,23 @@
                 }
             },
 
-            // Déclencher alerte
             triggerAlert(id, radar, dist) {
                 const distMeters = (dist * 1000).toFixed(0);
                 const message = `RADAR ${radar.type} à ${distMeters}m ! Limite ${radar.vitesse} km/h - ${radar.direction}`;
                 
-                // Affichage visuel
                 const alertBox = document.getElementById('alertBox');
                 document.getElementById('alertText').textContent = message;
                 alertBox.classList.add('active');
 
-                // Synthèse vocale
                 this.speak(`Attention ! Radar à ${distMeters} mètres. Limite ${radar.vitesse} kilomètres heure.`);
 
-                // Marquer comme alerté
                 this.alertedRadars.add(id);
                 setTimeout(() => {
                     this.alertedRadars.delete(id);
                     alertBox.classList.remove('active');
-                }, 120000); // 2 min
+                }, 120000);
             },
 
-            // Synthèse vocale
             speak(text) {
                 if ('speechSynthesis' in window) {
                     const utterance = new SpeechSynthesisUtterance(text);
@@ -449,7 +789,6 @@
                 }
             },
 
-            // Calcul distance Haversine
             getDistance(lat1, lon1, lat2, lon2) {
                 const R = 6371;
                 const dLat = this.deg2rad(lat2 - lat1);
@@ -465,16 +804,14 @@
                 return deg * (Math.PI / 180);
             },
 
-            // Afficher/masquer chargement
             showLoading(show) {
                 document.getElementById('loading').classList.toggle('active', show);
             },
 
-            // Démarrage auto mobile
             checkMobileAutoStart() {
                 if (/Mobi|Android|iPhone/i.test(navigator.userAgent)) {
                     setTimeout(() => {
-                        if (confirm('Lancer la surveillance GPS automatiquement ?')) {
+                        if (confirm('🚀 Lancer la surveillance GPS automatiquement ?')) {
                             this.start();
                         }
                     }, 1500);
@@ -482,7 +819,6 @@
             }
         };
 
-        // Initialisation au chargement
         window.addEventListener('DOMContentLoaded', () => app.init());
     </script>
 </body>
